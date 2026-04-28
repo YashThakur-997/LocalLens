@@ -6,10 +6,12 @@ const PORT = process.env.PORT;
 const authrouter = require("./routes/auth.route");
 const jobrouter = require("./routes/job.route");
 const bodyParser = require("body-parser")
+const cors = require("cors");
 
 const app = express();
 
 app.use(bodyParser.json());
+app.use(cors());
 
 
 app.use("/auth",authrouter);

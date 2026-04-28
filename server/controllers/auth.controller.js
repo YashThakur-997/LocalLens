@@ -24,7 +24,8 @@ const login_handler = async (req, res) => {
         res.status(200).send({
             message: 'Login successful',
             token,
-            username: user.username
+            username: user.username,
+            role: user.role
         });
 
     }
@@ -79,8 +80,116 @@ const logout_handler = (req, res) => {
     res.redirect('/login');
 };
 
+const search_workers_handler = async (req, res) => {
+    try {
+        const {
+            q = "",
+            category = "all",
+            availability = "all",
+            minRating = "0",
+        } = req.query;
+
+        const query = {
+            role: 'worker',
+        };
+
+        if (availability === 'available') {
+            query['workerProfile.isAvailable'] = true;
+        } else if (availability === 'unavailable') {
+            query['workerProfile.isAvailable'] = false;
+        }
+
+        if (category && category !== 'all') {
+            query['workerProfile.category'] = new RegExp(category, 'i');
+        }
+
+        if (q) {
+            query.$or = [
+                { username: new RegExp(q, 'i') },
+                { email: new RegExp(q, 'i') },
+                { 'workerProfile.category': new RegExp(q, 'i') },
+            ];
+        }
+
+        const workers = await UserModel.find(query)
+            .select('username role location workerProfile')
+            .sort({ 'workerProfile.rating': -1, 'workerProfile.jobsCompleted': -1, createdAt: -1 });
+
+        const filteredWorkers = workers
+            .map((worker) => {
+                const rating = worker.workerProfile?.rating ?? 0;
+                const jobsCompleted = worker.workerProfile?.jobsCompleted ?? 0;
+
+                return {
+                    id: worker._id,
+                    name: worker.username,
+                    rating,
+                    jobsCompleted,
+                    category: worker.workerProfile?.category ?? 'General electrician',
+                    isAvailable: worker.workerProfile?.isAvailable ?? true,
+                    area: worker.location?.coordinates?.length === 2
+                        ? `${worker.location.coordinates[1].toFixed(4)}, ${worker.location.coordinates[0].toFixed(4)}`
+                        : 'Area not set',
+                    location: worker.location,
+                    workerProfile: worker.workerProfile,
+                };
+            })
+            .filter((worker) => worker.rating >= Number(minRating || 0));
+
+        return res.status(200).json({ workers: filteredWorkers });
+    }
+    catch (err) {
+        console.error('Worker search error:', err);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+const get_worker_handler = async (req, res) => {
+    try {
+        const { workerId } = req.params;
+
+        const worker = await UserModel.findOne({ _id: workerId, role: 'worker' })
+            .select('username email phone role location workerProfile createdAt');
+
+        if (!worker) {
+            return res.status(404).json({ message: 'Worker not found' });
+        }
+
+        return res.status(200).json({ worker });
+    }
+    catch (err) {
+        console.error('Worker profile fetch error:', err);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+const profile_handler = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const user = await UserModel.findById(userId).select('username email phone role location workerProfile createdAt');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        return res.status(200).json({ user });
+    }
+    catch (err) {
+        console.error('Profile fetch error:', err);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+}
+
 module.exports = {
     login_handler,
     signup_handler,
-    logout_handler
+    logout_handler,
+    search_workers_handler,
+    get_worker_handler,
+    profile_handler,
 };

@@ -3,11 +3,22 @@ import { createContext, useContext, useMemo, useState } from "react"
 const UserContext = createContext(null)
 
 export function UserProvider({ children }) {
-  const [role, setRole] = useState("client")
+  const [role, setRoleState] = useState(() => localStorage.getItem("role") ?? "client")
   const [coordinates, setCoordinates] = useState(null)
   const [tokenState, setTokenState] = useState(
     () => localStorage.getItem("token") ?? ""
   )
+
+  const setRole = (nextRole) => {
+    setRoleState(nextRole)
+
+    if (nextRole) {
+      localStorage.setItem("role", nextRole)
+      return
+    }
+
+    localStorage.removeItem("role")
+  }
 
   const setToken = (nextToken) => {
     setTokenState(nextToken)

@@ -6,14 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useUser } from "@/context/UserContext"
+import api from "@/lib/api"
+import { reverseGeocode } from "@/lib/location"
 
 function SignupForm({ role }) {
 	const navigate = useNavigate()
-	const { setRole, setCoordinates, setToken } = useUser()
+	const { setRole, setCoordinates, setToken, coordinates } = useUser()
 	const [name, setName] = useState("")
 	const [email, setEmail] = useState("")
+	const [phone, setPhone] = useState("")
 	const [password, setPassword] = useState("")
 	const [locationStatus, setLocationStatus] = useState("Location not detected")
+	const [error, setError] = useState("")
+	const [isSubmitting, setIsSubmitting] = useState(false)
 
 	const detectLocation = () => {
 		if (!navigator.geolocation) {
@@ -23,16 +28,15 @@ function SignupForm({ role }) {
 
 		setLocationStatus("Detecting location...")
 		navigator.geolocation.getCurrentPosition(
-			(position) => {
+			async (position) => {
 				const nextCoordinates = {
 					latitude: position.coords.latitude,
 					longitude: position.coords.longitude,
 				}
 
 				setCoordinates(nextCoordinates)
-				setLocationStatus(
-					`Saved ${nextCoordinates.latitude.toFixed(4)}, ${nextCoordinates.longitude.toFixed(4)}`
-				)
+				const locationName = await reverseGeocode(nextCoordinates)
+				setLocationStatus(`Saved ${locationName}`)
 			},
 			() => {
 				setLocationStatus("Unable to detect location")
@@ -40,16 +44,81 @@ function SignupForm({ role }) {
 		)
 	}
 
-	const handleSubmit = (event) => {
+	// Promise-based geolocation helper so we can await it on submit
+	const getCurrentPositionAsync = () =>
+		new Promise((resolve, reject) => {
+			if (!navigator.geolocation) {
+				reject(new Error("Geolocation not supported"))
+				return
+			}
+
+			navigator.geolocation.getCurrentPosition(
+				(position) => resolve(position),
+				(err) => reject(err),
+				{ enableHighAccuracy: true, timeout: 10000 }
+			)
+		})
+
+	const handleSubmit = async (event) => {
 		event.preventDefault()
 
-		if (!name || !email || !password) {
+		if (!name || !email || !phone || !password) {
 			return
 		}
 
-		setRole(role)
-		setToken(`demo-token-${role}-${Date.now()}`)
-		navigate("/dashboard", { replace: true })
+		let resolvedCoordinates = coordinates
+
+		// If coordinates aren't already set, attempt to auto-detect here
+		if (!resolvedCoordinates) {
+			setLocationStatus("Detecting location...")
+			try {
+				const pos = await getCurrentPositionAsync()
+				const nextCoordinates = {
+					latitude: pos.coords.latitude,
+					longitude: pos.coords.longitude,
+				}
+				setCoordinates(nextCoordinates)
+				resolvedCoordinates = nextCoordinates
+				const locationName = await reverseGeocode(nextCoordinates)
+				setLocationStatus(`Saved ${locationName}`)
+			} catch (err) {
+				setError("Unable to detect location. Please allow location access or set it manually.")
+				setLocationStatus("Unable to detect location")
+				return
+			}
+		}
+
+		setError("")
+		setIsSubmitting(true)
+
+		const payload = {
+			username: name,
+			email,
+			password,
+			phone,
+			role,
+			location: {
+				type: "Point",
+				coordinates: [resolvedCoordinates.longitude, resolvedCoordinates.latitude],
+			},
+		}
+
+		try {
+			await api.post("/auth/signup", payload)
+
+			const loginResponse = await api.post("/auth/login", { email, password })
+			setRole(loginResponse.data.role ?? role)
+			setToken(loginResponse.data.token)
+			navigate("/dashboard", { replace: true })
+		} catch (requestError) {
+			setError(
+				requestError?.response?.data?.message ||
+				requestError?.response?.data ||
+				"Signup failed. Please check your details and try again."
+			)
+		} finally {
+			setIsSubmitting(false)
+		}
 	}
 
 	return (
@@ -65,6 +134,13 @@ function SignupForm({ role }) {
 				placeholder="Email"
 				value={email}
 				onChange={(event) => setEmail(event.target.value)}
+				className="rounded-2xl border-zinc-800"
+			/>
+			<Input
+				type="tel"
+				placeholder="Phone number"
+				value={phone}
+				onChange={(event) => setPhone(event.target.value)}
 				className="rounded-2xl border-zinc-800"
 			/>
 			<Input
@@ -87,8 +163,14 @@ function SignupForm({ role }) {
 				<p className="text-xs text-zinc-400">{locationStatus}</p>
 			</div>
 
-			<Button type="submit" className="w-full rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500">
-				Continue as {role}
+			{error && <p className="text-sm text-red-300">{error}</p>}
+
+			<Button
+				type="submit"
+				disabled={isSubmitting}
+				className="w-full rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-70"
+			>
+				{isSubmitting ? "Creating account..." : `Continue as ${role}`}
 			</Button>
 		</form>
 	)

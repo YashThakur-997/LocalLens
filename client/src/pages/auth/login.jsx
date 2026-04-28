@@ -5,26 +5,44 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useUser } from "@/context/UserContext"
+import api from "@/lib/api"
 
 export default function LoginPage() {
 	const navigate = useNavigate()
-	const { token, setToken } = useUser()
+	const { token, setToken, setRole } = useUser()
 	const [email, setEmail] = useState("")
 	const [password, setPassword] = useState("")
+	const [error, setError] = useState("")
+	const [isSubmitting, setIsSubmitting] = useState(false)
 
 	if (token) {
 		return <Navigate to="/dashboard" replace />
 	}
 
-	const handleSubmit = (event) => {
+	const handleSubmit = async (event) => {
 		event.preventDefault()
 
 		if (!email || !password) {
 			return
 		}
 
-		setToken(`demo-token-${Date.now()}`)
-		navigate("/dashboard", { replace: true })
+		setError("")
+		setIsSubmitting(true)
+
+		try {
+			const response = await api.post("/auth/login", { email, password })
+			setToken(response.data.token)
+			setRole(response.data.role ?? "client")
+			navigate("/dashboard", { replace: true })
+		} catch (requestError) {
+			setError(
+				requestError?.response?.data?.message ||
+				requestError?.response?.data ||
+				"Login failed. Check your credentials and try again."
+			)
+		} finally {
+			setIsSubmitting(false)
+		}
 	}
 
 	return (
@@ -54,8 +72,14 @@ export default function LoginPage() {
 								className="rounded-2xl border-zinc-800"
 							/>
 
-							<Button type="submit" className="w-full rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500">
-								Login
+							{error && <p className="text-sm text-red-300">{error}</p>}
+
+							<Button
+								type="submit"
+								disabled={isSubmitting}
+								className="w-full rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-70"
+							>
+								{isSubmitting ? "Signing in..." : "Login"}
 							</Button>
 						</form>
 
