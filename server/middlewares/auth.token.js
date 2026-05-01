@@ -7,7 +7,7 @@ let authMiddleware = (req, res, next) => {
     let token = req.headers['authorization'] || req.cookies?.token;
 
     // Strip "Bearer " if present
-    if (token.startsWith('Bearer ')) {
+    if (token && token.startsWith('Bearer ')) {
         token = token.slice(7);
     }
 

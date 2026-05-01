@@ -8,6 +8,36 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useUser } from "@/context/UserContext"
 import api from "@/lib/api"
 import { reverseGeocode } from "@/lib/location"
+import { CircleMarker, MapContainer, TileLayer, useMapEvents } from "react-leaflet"
+import "leaflet/dist/leaflet.css"
+
+function LocationClickPicker({ selectedPoint, onPick }) {
+	useMapEvents({
+		click(event) {
+			onPick({
+				latitude: event.latlng.lat,
+				longitude: event.latlng.lng,
+			})
+		},
+	})
+
+	if (!selectedPoint) {
+		return null
+	}
+
+	return (
+		<CircleMarker
+			center={[selectedPoint.latitude, selectedPoint.longitude]}
+			radius={9}
+			pathOptions={{
+				color: "#f59e0b",
+				fillColor: "#f59e0b",
+				fillOpacity: 0.85,
+				weight: 2,
+			}}
+		/>
+	)
+}
 
 function SignupForm({ role }) {
 	const navigate = useNavigate()
@@ -18,6 +48,8 @@ function SignupForm({ role }) {
 	const [password, setPassword] = useState("")
 	const [category, setCategory] = useState("electrician")
 	const [locationStatus, setLocationStatus] = useState("Location not detected")
+	const [showMapPicker, setShowMapPicker] = useState(false)
+	const [pickedLocation, setPickedLocation] = useState(null)
 	const [error, setError] = useState("")
 	const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -40,9 +72,26 @@ function SignupForm({ role }) {
 				setLocationStatus(`Saved ${locationName}`)
 			},
 			() => {
-				setLocationStatus("Unable to detect location")
+				setShowMapPicker(true)
+				setLocationStatus("Auto-detect failed. Pick your location on the map.")
 			}
 		)
+	}
+
+	const applyPickedLocation = async () => {
+		if (!pickedLocation) {
+			setError("Pick a location on the map first.")
+			return false
+		}
+
+		setCoordinates(pickedLocation)
+		setError("")
+		setLocationStatus("Location saved from map selection")
+
+		const locationName = await reverseGeocode(pickedLocation)
+		setLocationStatus(`Saved ${locationName}`)
+
+		return true
 	}
 
 	// Promise-based geolocation helper so we can await it on submit
@@ -74,6 +123,16 @@ function SignupForm({ role }) {
 
 		let resolvedCoordinates = coordinates
 
+		if (!resolvedCoordinates && showMapPicker && pickedLocation) {
+			const manualApplied = await applyPickedLocation()
+
+			if (!manualApplied) {
+				return
+			}
+
+			resolvedCoordinates = pickedLocation
+		}
+
 		// If coordinates aren't already set, attempt to auto-detect here
 		if (!resolvedCoordinates) {
 			setLocationStatus("Detecting location...")
@@ -88,8 +147,9 @@ function SignupForm({ role }) {
 				const locationName = await reverseGeocode(nextCoordinates)
 				setLocationStatus(`Saved ${locationName}`)
 			} catch (err) {
-				setError("Unable to detect location. Please allow location access or set it manually.")
-				setLocationStatus("Unable to detect location")
+				setShowMapPicker(true)
+				setError("Unable to detect location. Pick your point on the map instead.")
+				setLocationStatus("Auto-detect failed. Pick your location on the map.")
 				return
 			}
 		}
@@ -186,6 +246,53 @@ function SignupForm({ role }) {
 				</Button>
 				<p className="text-xs text-zinc-400">{locationStatus}</p>
 			</div>
+
+			{showMapPicker && (
+				<div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
+					<div className="space-y-1">
+						<p className="text-sm font-medium text-zinc-100">Pick your location on the map</p>
+						<p className="text-xs text-zinc-400">
+							Tap anywhere on the map to place your point, then continue signup.
+						</p>
+					</div>
+					<div className="overflow-hidden rounded-2xl border border-zinc-800">
+						<MapContainer
+							center={pickedLocation ? [pickedLocation.latitude, pickedLocation.longitude] : [20.5937, 78.9629]}
+							zoom={pickedLocation ? 14 : 5}
+							className="h-72 w-full"
+							scrollWheelZoom
+						>
+							<TileLayer
+								url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+								attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+							/>
+							<LocationClickPicker
+								selectedPoint={pickedLocation}
+								onPick={(nextPoint) => {
+									setPickedLocation(nextPoint)
+									setCoordinates(nextPoint)
+									setError("")
+									setLocationStatus("Map point selected. Save to continue.")
+								}}
+							/>
+						</MapContainer>
+					</div>
+					{pickedLocation && (
+						<p className="text-xs text-zinc-400">
+							Selected point: {pickedLocation.latitude.toFixed(5)}, {pickedLocation.longitude.toFixed(5)}
+						</p>
+					)}
+					<Button
+						type="button"
+						variant="outline"
+						className="w-full rounded-2xl border-zinc-800 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+						onClick={applyPickedLocation}
+						disabled={!pickedLocation}
+					>
+						Use selected map point
+					</Button>
+				</div>
+			)}
 
 			{error && <p className="text-sm text-red-300">{error}</p>}
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Navigate, useNavigate } from "react-router-dom"
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,9 +17,15 @@ function WorkerResultCard({ worker, onViewProfile }) {
     <Card className="rounded-2xl border-zinc-800 bg-zinc-950/70 text-zinc-100 transition hover:border-zinc-700 hover:bg-zinc-950">
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-zinc-100">{worker.name}</h3>
-            <p className="text-xs text-zinc-500">{worker.area}</p>
+          <div className="flex items-center gap-3 flex-1">
+            <Avatar className="size-12">
+              <AvatarImage src={worker.profilePictureUrl} alt={worker.name} />
+              <AvatarFallback>{worker.name?.slice(0, 2).toUpperCase() || 'W'}</AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="text-base font-semibold text-zinc-100">{worker.name}</h3>
+              <p className="text-xs text-zinc-500">{worker.area}</p>
+            </div>
           </div>
           <p className="text-sm font-semibold text-zinc-100">{Number(worker.rating).toFixed(1)}★</p>
         </div>

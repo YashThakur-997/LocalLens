@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/drawer"
 import { Input } from "@/components/ui/input"
 import { useUser } from "@/context/UserContext"
+import api from "@/lib/api"
 import Navbar from "@/pages/navbar"
 
 export default function UploadPage() {
@@ -27,6 +28,8 @@ export default function UploadPage() {
 	const [mediaPreviewUrl, setMediaPreviewUrl] = useState("")
 	const [mediaType, setMediaType] = useState("")
 	const [status, setStatus] = useState("idle")
+	const [error, setError] = useState("")
+	const [isSubmitting, setIsSubmitting] = useState(false)
 
 	useEffect(() => {
 		return () => {
@@ -45,25 +48,44 @@ export default function UploadPage() {
 		return <Navigate to="/dashboard" replace />
 	}
 
-	const handleSubmit = (event) => {
+	const handleSubmit = async (event) => {
 		event.preventDefault()
 
 		if (!title || !location || !mediaFile) {
+			setError("Title, location, and a media file are required.")
 			return
 		}
 
-		setStatus("success")
-		setTitle("")
-		setCategory("repair")
-		setLocation("")
+		try {
+			setIsSubmitting(true)
+			setError("")
 
-		if (mediaPreviewUrl) {
-			URL.revokeObjectURL(mediaPreviewUrl)
+			const formData = new FormData()
+			formData.append("title", title)
+			formData.append("category", category)
+			formData.append("location", location)
+			formData.append("media", mediaFile)
+
+			await api.post("/posts", formData)
+
+			setStatus("success")
+			setTitle("")
+			setCategory("repair")
+			setLocation("")
+
+			if (mediaPreviewUrl) {
+				URL.revokeObjectURL(mediaPreviewUrl)
+			}
+
+			setMediaFile(null)
+			setMediaPreviewUrl("")
+			setMediaType("")
+		} catch (requestError) {
+			setStatus("idle")
+			setError(requestError?.response?.data?.message || "Unable to publish upload right now.")
+		} finally {
+			setIsSubmitting(false)
 		}
-
-		setMediaFile(null)
-		setMediaPreviewUrl("")
-		setMediaType("")
 	}
 
 	const handleMediaChange = (event) => {
@@ -98,6 +120,9 @@ export default function UploadPage() {
 					<CardContent className="space-y-4">
 						<p className="text-sm text-zinc-300">
 							Active mode: <span className="capitalize text-zinc-100">{role}</span>
+						</p>
+						<p className="text-sm text-zinc-400">
+							Upload a job photo or progress shot. It will appear in your profile posts after publishing.
 						</p>
 
 						<Drawer>
@@ -163,9 +188,9 @@ export default function UploadPage() {
 										)}
 									</div>
 
-									<Button type="submit" className="w-full rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500">
+									<Button type="submit" className="w-full rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500" disabled={isSubmitting}>
 										<UploadCloud className="size-4" />
-										Submit Upload
+										{isSubmitting ? "Publishing..." : "Submit Upload"}
 									</Button>
 								</form>
 
@@ -179,9 +204,14 @@ export default function UploadPage() {
 							</DrawerContent>
 						</Drawer>
 
-						{status === "success" && (
+						{status === "success" && !error && (
 							<div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-								Upload submitted successfully.
+								Upload published successfully. Open your profile to see it in Posts.
+							</div>
+						)}
+						{error && (
+							<div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+								{error}
 							</div>
 						)}
 					</CardContent>

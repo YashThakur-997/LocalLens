@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Navigate, useParams } from "react-router-dom"
 
-import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,16 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useUser } from "@/context/UserContext"
 import api from "@/lib/api"
 import { reverseGeocode } from "@/lib/location"
+import WorkerPostGrid from "@/components/work/WorkerPostGrid"
+import PostModal from "@/components/work/PostModal"
 import Navbar from "@/pages/navbar"
-
-const showcaseTiles = [
-  { id: 1, title: "Panel wiring", tone: "from-zinc-700 via-zinc-800 to-black" },
-  { id: 2, title: "Fan repair", tone: "from-amber-600 via-orange-600 to-red-700" },
-  { id: 3, title: "Site check", tone: "from-sky-700 via-blue-700 to-indigo-800" },
-  { id: 4, title: "Tools ready", tone: "from-emerald-700 via-teal-700 to-cyan-800" },
-  { id: 5, title: "Safety first", tone: "from-fuchsia-700 via-pink-700 to-rose-800" },
-  { id: 6, title: "After fix", tone: "from-violet-700 via-purple-700 to-indigo-800" },
-]
 
 function Stat({ label, value }) {
   return (
@@ -39,6 +31,10 @@ export default function WorkerProfilePage() {
   const [locationName, setLocationName] = useState("Location not available")
   const [isBooking, setIsBooking] = useState(false)
   const [bookingError, setBookingError] = useState("")
+  const [workerPosts, setWorkerPosts] = useState([])
+  const [viewerIndex, setViewerIndex] = useState(-1)
+  const [postsLoading, setPostsLoading] = useState(false)
+  const [postsError, setPostsError] = useState("")
 
   useEffect(() => {
     let isMounted = true
@@ -66,6 +62,40 @@ export default function WorkerProfilePage() {
     }
 
     loadWorker()
+
+    return () => {
+      isMounted = false
+    }
+  }, [workerId])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadWorkerPosts = async () => {
+      try {
+        setPostsLoading(true)
+        setPostsError("")
+
+        const response = await api.get(`/posts/worker/${workerId}`)
+
+        if (isMounted) {
+          setWorkerPosts(response.data.posts ?? [])
+        }
+      } catch (requestError) {
+        if (isMounted) {
+          setPostsError(requestError?.response?.data?.message || "Unable to load worker uploads.")
+          setWorkerPosts([])
+        }
+      } finally {
+        if (isMounted) {
+          setPostsLoading(false)
+        }
+      }
+    }
+
+    if (workerId) {
+      loadWorkerPosts()
+    }
 
     return () => {
       isMounted = false
@@ -147,7 +177,7 @@ export default function WorkerProfilePage() {
                     <div className="rounded-full bg-zinc-950 p-1">
                       <Avatar className="size-20 sm:size-24">
                         <AvatarImage
-                          src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80"
+                          src={worker.profilePictureUrl || "https://ui-avatars.com/api/?name=User&background=3f3f46&color=ffffff&bold=true"}
                           alt={displayName}
                         />
                         <AvatarFallback>{initial}</AvatarFallback>
@@ -188,9 +218,9 @@ export default function WorkerProfilePage() {
               )}
 
               <div className="grid grid-cols-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-3 py-3">
-                <Stat label="Posts" value="9" />
-                <Stat label="Followers" value="1.2k" />
-                <Stat label="Following" value="341" />
+                <Stat label="Posts" value={workerPosts.length} />
+                <Stat label="Jobs Completed" value={worker.workerProfile?.jobsCompleted ?? 0} />
+                <Stat label="Rating" value={Number(worker.workerProfile?.rating ?? 0).toFixed(1)} />
               </div>
 
               <p className="text-sm text-zinc-300">
@@ -206,21 +236,22 @@ export default function WorkerProfilePage() {
               </TabsList>
 
               <TabsContent value="posts" className="pt-4">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
-                  {showcaseTiles.map((tile, index) => (
-                    <AspectRatio key={tile.id} ratio={1}>
-                      <div
-                        className={`flex h-full w-full items-end rounded-2xl bg-linear-to-br ${tile.tone} p-3`}
-                        style={{ opacity: index === 0 ? 1 : 0.96 }}
-                      >
-                        <div className="space-y-1">
-                          <p className="text-[11px] uppercase tracking-wide text-white/70">Work shot</p>
-                          <p className="text-sm font-medium text-white">{tile.title}</p>
-                        </div>
-                      </div>
-                    </AspectRatio>
-                  ))}
-                </div>
+                {postsLoading ? (
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-400">
+                    Loading posts...
+                  </div>
+                ) : postsError ? (
+                  <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                    {postsError}
+                  </div>
+                ) : (
+                  <>
+                    <WorkerPostGrid posts={workerPosts} emptyMessage="This worker has not posted any uploads yet." onOpenPost={(idx) => setViewerIndex(idx)} />
+                    {viewerIndex >= 0 && (
+                      <PostModal posts={workerPosts} index={viewerIndex} onClose={() => setViewerIndex(-1)} />
+                    )}
+                  </>
+                )}
               </TabsContent>
             </Tabs>
           </div>

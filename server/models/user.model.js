@@ -25,7 +25,9 @@ const userSchema = new mongoose.Schema({
     type: { type: String, default: 'Point' },
     coordinates: { type: [Number], required: true } // [lng, lat]
   },
-  serviceHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Job' }]
+  serviceHistory: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Job' }],
+  profilePictureUrl: { type: String },
+  profilePicturePublicId: { type: String }
 }, { timestamps: true });
 
 userSchema.index({ location: '2dsphere' });

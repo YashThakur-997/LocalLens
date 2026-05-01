@@ -115,7 +115,7 @@ const search_workers_handler = async (req, res) => {
         }
 
         const workers = await UserModel.find(query)
-            .select('username role location workerProfile')
+            .select('username role location workerProfile profilePictureUrl')
             .sort({ 'workerProfile.rating': -1, 'workerProfile.jobsCompleted': -1, createdAt: -1 });
 
         const filteredWorkers = workers
@@ -130,6 +130,7 @@ const search_workers_handler = async (req, res) => {
                     jobsCompleted,
                     category: worker.workerProfile?.category ?? 'General electrician',
                     isAvailable: worker.workerProfile?.isAvailable ?? true,
+                    profilePictureUrl: worker.profilePictureUrl,
                     area: worker.location?.coordinates?.length === 2
                         ? `${worker.location.coordinates[1].toFixed(4)}, ${worker.location.coordinates[0].toFixed(4)}`
                         : 'Area not set',
@@ -152,7 +153,7 @@ const get_worker_handler = async (req, res) => {
         const { workerId } = req.params;
 
         const worker = await UserModel.findOne({ _id: workerId, role: 'worker' })
-            .select('username email phone role location workerProfile createdAt');
+            .select('username email phone role location workerProfile createdAt profilePictureUrl');
 
         if (!worker) {
             return res.status(404).json({ message: 'Worker not found' });
@@ -174,7 +175,7 @@ const profile_handler = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
-        const user = await UserModel.findById(userId).select('username email phone role location workerProfile createdAt');
+        const user = await UserModel.findById(userId).select('username email phone role location workerProfile createdAt profilePictureUrl');
 
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -225,6 +226,63 @@ const update_worker_availability_handler = async (req, res) => {
     }
 }
 
+const cloudinary = require('../config/cloudinary');
+
+const upload_profile_picture_handler = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Delete old profile picture if exists
+        if (user.profilePicturePublicId) {
+            try {
+                await cloudinary.uploader.destroy(user.profilePicturePublicId);
+            } catch (err) {
+                console.error('Error deleting old profile picture:', err);
+            }
+        }
+
+        // Upload new profile picture
+        const uploadStream = cloudinary.uploader.upload_stream(
+            { folder: 'locallens/profile-pictures' },
+            async (error, result) => {
+                if (error) {
+                    console.error('Cloudinary upload error:', error);
+                    return res.status(500).json({ message: 'Failed to upload profile picture' });
+                }
+
+                try {
+                    user.profilePictureUrl = result.secure_url;
+                    user.profilePicturePublicId = result.public_id;
+                    await user.save();
+
+                    res.status(200).json({
+                        message: 'Profile picture uploaded successfully',
+                        profilePictureUrl: user.profilePictureUrl
+                    });
+                } catch (dbError) {
+                    console.error('Database error:', dbError);
+                    res.status(500).json({ message: 'Failed to save profile picture' });
+                }
+            }
+        );
+
+        uploadStream.end(file.buffer);
+    } catch (err) {
+        console.error('Profile picture upload error:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+}
+
 module.exports = {
     login_handler,
     signup_handler,
@@ -233,4 +291,5 @@ module.exports = {
     get_worker_handler,
     profile_handler,
     update_worker_availability_handler,
+    upload_profile_picture_handler,
 };
