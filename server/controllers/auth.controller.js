@@ -46,7 +46,10 @@ const signup_handler = async (req, res) => {
         const payload = { username, email, password, phone, role: normalizedRole, location };
 
         if (normalizedRole === 'worker') {
-            payload.workerProfile = workerProfile || {};
+            payload.workerProfile = {
+                ...(workerProfile || {}),
+                category: workerProfile?.category?.trim(),
+            };
         }
 
         const newUser = new UserModel(payload);
@@ -185,6 +188,43 @@ const profile_handler = async (req, res) => {
     }
 }
 
+const update_worker_availability_handler = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const { isAvailable } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const worker = await UserModel.findById(userId);
+
+        if (!worker) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (worker.role !== 'worker') {
+            return res.status(403).json({ message: 'Only workers can update availability' });
+        }
+
+        if (!worker.workerProfile) {
+            worker.workerProfile = {};
+        }
+
+        worker.workerProfile.isAvailable = Boolean(isAvailable);
+        await worker.save();
+
+        return res.status(200).json({
+            message: 'Availability updated successfully',
+            isAvailable: worker.workerProfile.isAvailable,
+        });
+    }
+    catch (err) {
+        console.error('Availability update error:', err);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+}
+
 module.exports = {
     login_handler,
     signup_handler,
@@ -192,4 +232,5 @@ module.exports = {
     search_workers_handler,
     get_worker_handler,
     profile_handler,
+    update_worker_availability_handler,
 };

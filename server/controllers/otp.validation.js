@@ -3,14 +3,17 @@ const User = require('../models/user.model');
 
 const requestCompletion = async (req, res) => {
     const { jobId } = req.params;
+    const workerId = req.user?.id;
     // Generate 4-digit OTP
     const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
     try {
-        const job = await Job.findByIdAndUpdate(jobId, { otp: generatedOtp }, { new: true });
+        const job = await Job.findOne({ _id: jobId, worker: workerId, status: 'accepted' });
         if (!job) {
             return res.status(404).send('Job not found');
         }
+        job.otp = generatedOtp;
+        await job.save();
         // In a real app, you'd send this via SMS to the Client's phone
         res.status(200).json({ message: "OTP sent to client", debugOtp: generatedOtp });
     } catch (err) {
@@ -20,9 +23,10 @@ const requestCompletion = async (req, res) => {
 
 const verifyAndRate = async (req, res) => {
     const { jobId, otp, rating, comment } = req.body;
+    const clientId = req.user?.id;
 
     try {
-        const job = await Job.findById(jobId);
+        const job = await Job.findOne({ _id: jobId, client: clientId, status: 'accepted' });
         if (!job) return res.status(404).send('Job not found');
         if (job.otp !== otp) return res.status(401).send('Invalid OTP');
 

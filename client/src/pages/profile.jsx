@@ -119,6 +119,8 @@ export default function ProfilePage() {
 	const displayName = profile?.username ?? (profileRole === "worker" ? "Raj Verma" : "Priya Sharma")
 	const showPostsSection = profileRole === "worker"
 	const showStatsSection = profileRole === "worker"
+	const workerRating = Number(profile?.workerProfile?.rating ?? 0).toFixed(1)
+	const workerJobsCompleted = profile?.workerProfile?.jobsCompleted ?? 0
 	const locationCoordinates = profile?.location?.coordinates
 
 	useEffect(() => {
@@ -303,9 +305,9 @@ export default function ProfilePage() {
 
 					{showStatsSection && (
 						<div className="grid grid-cols-3 rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-3 sm:max-w-md">
-							<ProfileStat label="Posts" value="24" />
-							<ProfileStat label="Followers" value="1.2k" />
-							<ProfileStat label="Following" value="341" />
+							<ProfileStat label="Posts" value={posts.length} />
+							<ProfileStat label="Rating" value={workerRating} />
+							<ProfileStat label="Jobs Completed" value={workerJobsCompleted} />
 						</div>
 					)}
 				</section>

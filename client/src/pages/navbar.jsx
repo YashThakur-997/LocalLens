@@ -1,5 +1,5 @@
 import { Link, NavLink } from "react-router-dom"
-import { Home, MessageCircle, Plus, User } from "lucide-react"
+import { Home, Inbox, CalendarDays, MessageCircle, Plus, User } from "lucide-react"
 import { useUser } from "@/context/UserContext"
 
 const navItemClass = ({ isActive }) =>
@@ -24,6 +24,16 @@ export default function Navbar() {
 						<NavLink to="/dashboard" className={navItemClass}>
 							Dashboard
 						</NavLink>
+						{role === "client" && (
+							<NavLink to="/bookings" className={navItemClass}>
+								Bookings
+							</NavLink>
+						)}
+						{role === "worker" && (
+							<NavLink to="/requests" className={navItemClass}>
+								Requests
+							</NavLink>
+						)}
 						{role === "worker" && (
 							<NavLink to="/upload" className={navItemClass}>
 								Upload
@@ -39,18 +49,34 @@ export default function Navbar() {
 				<Link to="/dashboard" className="text-lg font-semibold tracking-tight text-zinc-100 my-auto">
 					LocalLens
 				</Link>
-				<NavLink
-					to="/messages"
-					className={({ isActive }) =>
-						[
-							"flex min-w-20 flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition",
-							isActive ? "text-indigo-400" : "text-zinc-400 hover:text-zinc-200",
-						].join(" ")
-					}
-				>
-					<MessageCircle className="size-5" />
-					<span>Message</span>
-				</NavLink>
+				{role === "client" && (
+					<NavLink
+						to="/bookings"
+						className={({ isActive }) =>
+							[
+								"flex min-w-20 flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition",
+								isActive ? "text-indigo-400" : "text-zinc-400 hover:text-zinc-200",
+							].join(" ")
+						}
+					>
+						<CalendarDays className="size-5" />
+						<span>Bookings</span>
+					</NavLink>
+				)}
+				{role === "worker" && (
+					<NavLink
+						to="/requests"
+						className={({ isActive }) =>
+							[
+								"flex min-w-20 flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition",
+								isActive ? "text-indigo-400" : "text-zinc-400 hover:text-zinc-200",
+							].join(" ")
+						}
+					>
+						<Inbox className="size-5" />
+						<span>Requests</span>
+					</NavLink>
+				)}
 			</header>
 
 			<nav className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-800 bg-zinc-950 md:hidden my-0">

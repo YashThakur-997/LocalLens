@@ -7,6 +7,8 @@ import SignupPage from "@/pages/auth/signup"
 import DashboardPage from "@/pages/dashboard"
 import ProfilePage from "@/pages/profile"
 import UploadPage from "@/pages/upload"
+import BookingsPage from "@/pages/bookings"
+import RequestsPage from "@/pages/requests"
 import WorkerProfilePage from "@/pages/worker-profile"
 
 function ProtectedRoute({ children }) {
@@ -55,6 +57,22 @@ function App() {
         element={
           <ProtectedRoute>
             <UploadPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/bookings"
+        element={
+          <ProtectedRoute>
+            <BookingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/requests"
+        element={
+          <ProtectedRoute>
+            <RequestsPage />
           </ProtectedRoute>
         }
       />

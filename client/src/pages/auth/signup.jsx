@@ -16,6 +16,7 @@ function SignupForm({ role }) {
 	const [email, setEmail] = useState("")
 	const [phone, setPhone] = useState("")
 	const [password, setPassword] = useState("")
+	const [category, setCategory] = useState("electrician")
 	const [locationStatus, setLocationStatus] = useState("Location not detected")
 	const [error, setError] = useState("")
 	const [isSubmitting, setIsSubmitting] = useState(false)
@@ -66,6 +67,11 @@ function SignupForm({ role }) {
 			return
 		}
 
+		if (role === "worker" && !category) {
+			setError("Please select a category for the worker profile.")
+			return
+		}
+
 		let resolvedCoordinates = coordinates
 
 		// If coordinates aren't already set, attempt to auto-detect here
@@ -97,6 +103,9 @@ function SignupForm({ role }) {
 			password,
 			phone,
 			role,
+			...(role === "worker"
+				? { workerProfile: { category } }
+				: {}),
 			location: {
 				type: "Point",
 				coordinates: [resolvedCoordinates.longitude, resolvedCoordinates.latitude],
@@ -150,6 +159,21 @@ function SignupForm({ role }) {
 				onChange={(event) => setPassword(event.target.value)}
 				className="rounded-2xl border-zinc-800"
 			/>
+
+			{role === "worker" && (
+				<select
+					value={category}
+					onChange={(event) => setCategory(event.target.value)}
+					className="h-10 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
+				>
+					<option value="electrician">Electrician</option>
+					<option value="plumber">Plumber</option>
+					<option value="carpenter">Carpenter</option>
+					<option value="painter">Painter</option>
+					<option value="mechanic">Mechanic</option>
+					<option value="handyman">Handyman</option>
+				</select>
+			)}
 
 			<div className="space-y-2">
 				<Button

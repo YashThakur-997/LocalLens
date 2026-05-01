@@ -37,6 +37,8 @@ export default function WorkerProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [locationName, setLocationName] = useState("Location not available")
+  const [isBooking, setIsBooking] = useState(false)
+  const [bookingError, setBookingError] = useState("")
 
   useEffect(() => {
     let isMounted = true
@@ -103,6 +105,22 @@ export default function WorkerProfilePage() {
     }
   }, [worker])
 
+  const handleBookNow = async () => {
+    try {
+      setIsBooking(true)
+      setBookingError("")
+
+      await api.post("/job/create", { workerId })
+      window.location.href = "/bookings"
+    } catch (requestError) {
+      setBookingError(
+        requestError?.response?.data?.message || "Unable to create booking right now."
+      )
+    } finally {
+      setIsBooking(false)
+    }
+  }
+
   if (!token) {
     return <Navigate to="/login" replace />
   }
@@ -150,12 +168,24 @@ export default function WorkerProfilePage() {
                 </div>
 
                 <div className="flex gap-2 sm:items-start">
-                  <Button className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500">Book Now</Button>
+                  <Button
+                    className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500"
+                    onClick={handleBookNow}
+                    disabled={isBooking}
+                  >
+                    {isBooking ? "Booking..." : "Book Now"}
+                  </Button>
                   <Button variant="outline" className="rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800">
                     Message
                   </Button>
                 </div>
               </div>
+
+              {bookingError && (
+                <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                  {bookingError}
+                </div>
+              )}
 
               <div className="grid grid-cols-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-3 py-3">
                 <Stat label="Posts" value="9" />

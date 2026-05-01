@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Navigate, useNavigate } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
@@ -59,6 +59,16 @@ function ClientDashboard({ coordinates }) {
   const [sortBy, setSortBy] = useState("default")
   const [workers, setWorkers] = useState([])
   const [workerAreaNames, setWorkerAreaNames] = useState({})
+  const [hasSearched, setHasSearched] = useState(false)
+  const [currentWork, setCurrentWork] = useState([])
+  const [currentWorkLoading, setCurrentWorkLoading] = useState(true)
+  const [currentWorkError, setCurrentWorkError] = useState("")
+  const [reviewTargetId, setReviewTargetId] = useState("")
+  const [reviewOtp, setReviewOtp] = useState("")
+  const [reviewRating, setReviewRating] = useState("5")
+  const [reviewComment, setReviewComment] = useState("")
+  const [reviewNotice, setReviewNotice] = useState("")
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
   const [clientCoordinates, setClientCoordinates] = useState(
     coordinates?.latitude && coordinates?.longitude
       ? { latitude: coordinates.latitude, longitude: coordinates.longitude }
@@ -99,54 +109,97 @@ function ClientDashboard({ coordinates }) {
     }
   }, [clientCoordinates])
 
-  useEffect(() => {
-    let isMounted = true
+  const loadWorkers = async () => {
+    try {
+      setIsLoading(true)
+      setError("")
+      setHasSearched(true)
 
-    const loadWorkers = async () => {
-      try {
-        setIsLoading(true)
-        setError("")
+      const response = await api.get("/auth/workers", {
+        params: {
+          q: searchQuery,
+          category,
+          availability,
+          minRating,
+        },
+      })
 
-        const response = await api.get("/auth/workers", {
-          params: {
-            q: searchQuery,
-            category,
-            availability,
-            minRating,
-          },
-        })
-
-        if (isMounted) {
-          setWorkers(response.data.workers ?? [])
-        }
-      } catch (requestError) {
-        if (isMounted) {
-          setError(
-            requestError?.response?.data?.message ||
-              "Unable to load workers right now."
-          )
-          setWorkers([])
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      }
+      setWorkers(response.data.workers ?? [])
+    } catch (requestError) {
+      setError(
+        requestError?.response?.data?.message ||
+          "Unable to load workers right now."
+      )
+      setWorkers([])
+    } finally {
+      setIsLoading(false)
     }
+  }
 
-    const debounceTimer = window.setTimeout(() => {
-      loadWorkers()
-    }, 250)
+  const loadCurrentWork = async () => {
+    try {
+      setCurrentWorkLoading(true)
+      setCurrentWorkError("")
+
+      const response = await api.get("/job/current-work")
+      setCurrentWork(response.data.currentWork ?? [])
+    } catch (requestError) {
+      setCurrentWorkError(
+        requestError?.response?.data?.message || "Unable to load current work right now."
+      )
+      setCurrentWork([])
+    } finally {
+      setCurrentWorkLoading(false)
+    }
+  }
+
+  const handleSearch = (event) => {
+    event.preventDefault()
+    loadWorkers()
+  }
+
+  const handleReviewSubmit = async (jobId) => {
+    try {
+      setReviewSubmitting(true)
+      setReviewNotice("")
+      await api.post("/job/verify-and-rate", {
+        jobId,
+        otp: reviewOtp,
+        rating: Number(reviewRating),
+        comment: reviewComment,
+      })
+      setReviewNotice("Review submitted successfully.")
+      setReviewTargetId("")
+      setReviewOtp("")
+      setReviewRating("5")
+      setReviewComment("")
+      await loadCurrentWork()
+    } catch (requestError) {
+      setReviewNotice(requestError?.response?.data?.message || "Unable to submit review right now.")
+    } finally {
+      setReviewSubmitting(false)
+    }
+  }
+
+  useEffect(() => {
+    loadCurrentWork()
+
+    const refreshTimer = window.setInterval(() => {
+      loadCurrentWork()
+    }, 15000)
 
     return () => {
-      isMounted = false
-      window.clearTimeout(debounceTimer)
+      window.clearInterval(refreshTimer)
     }
-  }, [searchQuery, category, availability, minRating])
+  }, [])
 
   const resultCountLabel = useMemo(() => {
+    if (!hasSearched) {
+      return "Choose filters and tap Search to find workers"
+    }
+
     return isLoading ? "Searching workers..." : `${workers.length} workers found`
-  }, [isLoading, workers.length])
+  }, [hasSearched, isLoading, workers.length])
 
   const workersWithEta = useMemo(() => {
     const enrichedWorkers = workers.map((worker) => {
@@ -249,16 +302,117 @@ function ClientDashboard({ coordinates }) {
     <div className="space-y-4">
       <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
         <CardHeader>
+          <CardTitle className="text-2xl">Current Work</CardTitle>
+          <CardDescription className="text-zinc-400">
+            Active bookings that are ready for client review.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          {currentWorkLoading ? (
+            <p className="text-sm text-zinc-400">Loading current work...</p>
+          ) : currentWorkError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+              {currentWorkError}
+            </div>
+          ) : currentWork.length === 0 ? (
+            <p className="text-sm text-zinc-400">No active work right now.</p>
+          ) : (
+            currentWork.map((job) => (
+              <div key={job._id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-zinc-100">
+                      {job.worker?.username ?? "Worker"}
+                    </p>
+                    <p className="text-sm text-zinc-400">
+                      {job.worker?.workerProfile?.category ?? "Service request"}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Requested {new Date(job.createdAt).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      {job.otp ? "Worker shared an OTP. Enter it to verify and review." : "Waiting for the worker to finish and share the OTP."}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <Badge className={job.otp ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
+                      {job.otp ? "OTP READY" : "CURRENT WORK"}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800"
+                      onClick={() => {
+                        setReviewTargetId((current) => (current === job._id ? "" : job._id))
+                        setReviewNotice("")
+                      }}
+                    >
+                      Give Review
+                    </Button>
+                  </div>
+                </div>
+
+                {reviewTargetId === job._id && (
+                  <div className="mt-4 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                    <Input
+                      placeholder="OTP from worker"
+                      value={reviewOtp}
+                      onChange={(event) => setReviewOtp(event.target.value)}
+                      className="rounded-2xl border-zinc-800"
+                    />
+                    <select
+                      value={reviewRating}
+                      onChange={(event) => setReviewRating(event.target.value)}
+                      className="h-10 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
+                    >
+                      <option value="5">5 - Excellent</option>
+                      <option value="4">4 - Good</option>
+                      <option value="3">3 - Okay</option>
+                      <option value="2">2 - Poor</option>
+                      <option value="1">1 - Bad</option>
+                    </select>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(event) => setReviewComment(event.target.value)}
+                      placeholder="Leave a short review"
+                      className="min-h-24 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700"
+                    />
+                    <Button
+                      type="button"
+                      className="rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500"
+                      onClick={() => handleReviewSubmit(job._id)}
+                      disabled={reviewSubmitting}
+                    >
+                      {reviewSubmitting ? "Submitting..." : "Submit Review"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+          {reviewNotice && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-300">
+              {reviewNotice}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
+        <CardHeader>
           <CardTitle className="text-2xl">Find a Worker</CardTitle>
           <CardDescription className="text-zinc-400">
-            Search electricians, filter by category and availability, then open a profile card.
+            Search local professionals by trade, filter by availability and rating, then open a profile card.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
+          <form className="space-y-4" onSubmit={handleSearch}>
           <div className="grid gap-3 md:grid-cols-2">
             <Input
-              placeholder="Search by name or category"
+              placeholder="Search by name, locality, or trade"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               className="rounded-2xl border-zinc-800"
@@ -269,10 +423,13 @@ function ClientDashboard({ coordinates }) {
               onChange={(event) => setCategory(event.target.value)}
               className="h-10 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
             >
-              <option value="all">All categories</option>
-              <option value="repair">Repair</option>
-              <option value="installation">Installation</option>
-              <option value="inspection">Inspection</option>
+              <option value="all">All professions</option>
+              <option value="electrician">Electrician</option>
+              <option value="plumber">Plumber</option>
+              <option value="carpenter">Carpenter</option>
+              <option value="painter">Painter</option>
+              <option value="mechanic">Mechanic</option>
+              <option value="handyman">Handyman</option>
             </select>
 
             <select
@@ -307,9 +464,18 @@ function ClientDashboard({ coordinates }) {
             </select>
           </div>
 
-          <div className="flex items-center justify-between gap-3 text-sm text-zinc-400">
+          <div className="flex flex-col gap-3 text-sm text-zinc-400 sm:flex-row sm:items-center sm:justify-between">
             <p>{resultCountLabel}</p>
-            <p>Area is resolved from worker location</p>
+            <div className="flex items-center gap-2">
+              <p>Area is resolved from worker location</p>
+              <Button
+                type="submit"
+                className="rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500"
+                disabled={isLoading}
+              >
+                {isLoading ? "Searching..." : "Search"}
+              </Button>
+            </div>
           </div>
 
           {error && (
@@ -317,6 +483,7 @@ function ClientDashboard({ coordinates }) {
               {error}
             </div>
           )}
+          </form>
         </CardContent>
       </Card>
 
@@ -329,7 +496,7 @@ function ClientDashboard({ coordinates }) {
           />
         ))}
 
-        {!isLoading && workers.length === 0 && !error && (
+        {hasSearched && !isLoading && workers.length === 0 && !error && (
           <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
             <CardContent className="p-4 text-sm text-zinc-400">
               No workers matched your search.
@@ -344,9 +511,204 @@ function ClientDashboard({ coordinates }) {
 
 function WorkerDashboard() {
   const [isAvailable, setIsAvailable] = useState(true)
+  const [isSavingAvailability, setIsSavingAvailability] = useState(false)
+  const [availabilityError, setAvailabilityError] = useState("")
+  const [availabilityNotice, setAvailabilityNotice] = useState("")
+  const availabilityTimer = useRef(null)
+  const [currentWork, setCurrentWork] = useState([])
+  const [currentWorkLoading, setCurrentWorkLoading] = useState(true)
+  const [currentWorkError, setCurrentWorkError] = useState("")
+  const [completionNotice, setCompletionNotice] = useState("")
+  const [completionJobId, setCompletionJobId] = useState("")
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadAvailability = async () => {
+      try {
+        const response = await api.get("/auth/me")
+        const nextAvailability = response?.data?.user?.workerProfile?.isAvailable
+
+        if (isMounted && typeof nextAvailability === "boolean") {
+          setIsAvailable(nextAvailability)
+        }
+      } catch {
+        // Keep the current local default if the profile cannot be loaded.
+      }
+    }
+
+    loadAvailability()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadCurrentWork = async () => {
+      try {
+        setCurrentWorkLoading(true)
+        setCurrentWorkError("")
+
+        const response = await api.get("/job/current-work")
+
+        if (isMounted) {
+          setCurrentWork(response.data.currentWork ?? [])
+        }
+      } catch (requestError) {
+        if (isMounted) {
+          setCurrentWorkError(
+            requestError?.response?.data?.message || "Unable to load current work right now."
+          )
+          setCurrentWork([])
+        }
+      } finally {
+        if (isMounted) {
+          setCurrentWorkLoading(false)
+        }
+      }
+    }
+
+    loadCurrentWork()
+
+    const refreshTimer = window.setInterval(() => {
+      loadCurrentWork()
+    }, 15000)
+
+    return () => {
+      isMounted = false
+      window.clearInterval(refreshTimer)
+    }
+  }, [])
+
+  const handleAvailabilityToggle = async () => {
+    const nextAvailability = !isAvailable
+
+    try {
+      setIsSavingAvailability(true)
+      setAvailabilityError("")
+      setIsAvailable(nextAvailability)
+
+      const response = await api.patch("/auth/me/availability", {
+        isAvailable: nextAvailability,
+      })
+
+      const serverAvailable = typeof response?.data?.isAvailable === "boolean"
+        ? response.data.isAvailable
+        : nextAvailability
+
+      setIsAvailable(serverAvailable)
+
+      // Show a short, clear notice for the worker about the new state
+      setAvailabilityNotice(
+        serverAvailable
+          ? "You're now Available — you'll receive new requests."
+          : "You're now Unavailable — you won't receive new requests."
+      )
+
+      if (availabilityTimer.current) {
+        clearTimeout(availabilityTimer.current)
+      }
+      availabilityTimer.current = setTimeout(() => setAvailabilityNotice(""), 4000)
+    } catch (requestError) {
+      setIsAvailable((current) => !current)
+      setAvailabilityError(
+        requestError?.response?.data?.message || "Unable to update availability right now."
+      )
+    } finally {
+      setIsSavingAvailability(false)
+    }
+  }
+
+  const handleWorkCompleted = async (jobId) => {
+    try {
+      setCompletionJobId(jobId)
+      setCompletionNotice("")
+      const response = await api.post(`/job/request-completion/${jobId}`)
+      const otpCode = response?.data?.debugOtp
+
+      setCompletionNotice(
+        otpCode
+          ? `OTP generated: ${otpCode}. Speak this code to the client so they can verify it.`
+          : response?.data?.message || "OTP generated and sent to the client."
+      )
+      await api.get("/job/current-work").then((result) => {
+        setCurrentWork(result.data.currentWork ?? [])
+      })
+    } catch (requestError) {
+      setCompletionNotice(
+        requestError?.response?.data?.message || "Unable to mark work as completed right now."
+      )
+    } finally {
+      setCompletionJobId("")
+    }
+  }
 
   return (
     <div className="space-y-4">
+      <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
+        <CardHeader>
+          <CardTitle className="text-2xl">Current Work</CardTitle>
+          <CardDescription className="text-zinc-400">
+            Active accepted jobs that are ready for completion.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-3">
+          {currentWorkLoading ? (
+            <p className="text-sm text-zinc-400">Loading current work...</p>
+          ) : currentWorkError ? (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+              {currentWorkError}
+            </div>
+          ) : currentWork.length === 0 ? (
+            <p className="text-sm text-zinc-400">No active work right now.</p>
+          ) : (
+            currentWork.map((job) => (
+              <div key={job._id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-zinc-100">
+                      {job.client?.username ?? "Client"}
+                    </p>
+                    <p className="text-sm text-zinc-400">
+                      {job.client?.phone ?? "Phone not available"}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Accepted {new Date(job.createdAt).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      {job.otp ? "OTP shared with client. Waiting for verification." : "Click Work Completed to generate the OTP."}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:items-end">
+                    <Badge className={job.otp ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
+                      {job.otp ? "OTP READY" : "CURRENT WORK"}
+                    </Badge>
+                    <Button
+                      type="button"
+                      className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500"
+                      onClick={() => handleWorkCompleted(job._id)}
+                      disabled={completionJobId === job._id}
+                    >
+                      {completionJobId === job._id ? "Generating OTP..." : "Work Completed"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+          {completionNotice && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-300">
+              {completionNotice}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
         <CardHeader>
           <CardTitle className="text-2xl">Worker Dashboard</CardTitle>
@@ -361,48 +723,35 @@ function WorkerDashboard() {
             <p className="text-zinc-400">Toggle this to receive new requests.</p>
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsAvailable((current) => !current)}
-            className="rounded-2xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800"
-          >
-            {isAvailable ? "Set Unavailable" : "Set Available"}
-          </Button>
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-3">
+            <Badge className={isAvailable ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}>
+              {isAvailable ? "Available" : "Unavailable"}
+            </Badge>
 
-      <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
-        <CardHeader>
-          <CardTitle>Incoming Requests</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-zinc-300">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-            <p className="text-zinc-100">Switch board sparking</p>
-            <p className="text-zinc-400">Green Park, 1.2 km away</p>
-            <p className="text-zinc-400">Client: +91 90000 12345</p>
-          </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-            <p className="text-zinc-100">Fan not rotating</p>
-            <p className="text-zinc-400">Sector 18, 2.1 km away</p>
-            <p className="text-zinc-400">Client: +91 91111 54321</p>
+            <Button
+              type="button"
+              onClick={handleAvailabilityToggle}
+              disabled={isSavingAvailability}
+              className={isSavingAvailability ? "rounded-2xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800" : (isAvailable ? "rounded-2xl bg-rose-600 text-white hover:bg-rose-500" : "rounded-2xl bg-emerald-600 text-white hover:bg-emerald-500")}
+            >
+              {isSavingAvailability ? "Saving..." : isAvailable ? "Set Unavailable" : "Set Available"}
+            </Button>
           </div>
         </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
-        <CardHeader>
-          <CardTitle>Active Jobs</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-zinc-300">
-          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-            <div>
-              <p className="text-zinc-100">Wiring issue - Block C</p>
-              <p className="text-zinc-400">Started 20 minutes ago</p>
+        {availabilityNotice && (
+          <CardContent className="pt-0">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-300">
+              {availabilityNotice}
             </div>
-            <Badge className="border-blue-500/40 bg-blue-500/15 text-blue-300">In Progress</Badge>
-          </div>
-        </CardContent>
+          </CardContent>
+        )}
+        {availabilityError && (
+          <CardContent className="pt-0">
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+              {availabilityError}
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   )
