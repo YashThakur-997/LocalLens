@@ -2,7 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 dotenv.config();
 require("./models/db.connection");
-const PORT = process.env.PORT;
+const BACKEND_PORT = process.env.BACKEND_PORT;
 const authrouter = require("./routes/auth.route");
 const jobrouter = require("./routes/job.route");
 const postrouter = require("./routes/post.route");
@@ -23,6 +23,6 @@ app.get("/health",(req,res)=>{
     res.status(200).json("Api is healthy");
 })
 
-app.listen(PORT,()=>{
-    console.log("Server is listning to ",{PORT})
+app.listen(BACKEND_PORT,()=>{
+    console.log("Server is listning to ",{BACKEND_PORT})
 })

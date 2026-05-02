@@ -5,9 +5,10 @@ const UserContext = createContext(null)
 export function UserProvider({ children }) {
   const [role, setRoleState] = useState(() => localStorage.getItem("role") ?? "client")
   const [coordinates, setCoordinates] = useState(null)
-  const [tokenState, setTokenState] = useState(
-    () => localStorage.getItem("token") ?? ""
-  )
+  const [tokenState, setTokenState] = useState(() => {
+    const storedToken = localStorage.getItem("token")
+    return storedToken && storedToken.trim() !== "" ? storedToken : null
+  })
 
   const setRole = (nextRole) => {
     setRoleState(nextRole)
@@ -23,7 +24,7 @@ export function UserProvider({ children }) {
   const setToken = (nextToken) => {
     setTokenState(nextToken)
 
-    if (nextToken) {
+    if (nextToken && nextToken.trim() !== "") {
       localStorage.setItem("token", nextToken)
       return
     }

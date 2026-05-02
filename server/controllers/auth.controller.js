@@ -30,7 +30,8 @@ const login_handler = async (req, res) => {
 
     }
     catch (err) {
-        res.status(500).send('Internal Server Error',err);
+        console.error('Login error:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
     }
 }
 
