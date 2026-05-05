@@ -15,11 +15,11 @@ app.use(bodyParser.json());
 app.use(cors());
 
 
-app.use("/auth",authrouter);
-app.use("/job",jobrouter);
-app.use("/posts",postrouter);
+app.use("/api/auth",authrouter);
+app.use("/api/job",jobrouter);
+app.use("/api/posts",postrouter);
 
-app.get("/health",(req,res)=>{
+app.get("/api/health",(req,res)=>{
     res.status(200).json("Api is healthy");
 })
 

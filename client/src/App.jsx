@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
 import { useUser } from "@/context/UserContext"
+import LandingPage from "@/pages/landing"
 import LoginPage from "@/pages/auth/login"
 import LogoutPage from "@/pages/auth/logout"
 import SignupPage from "@/pages/auth/signup"
@@ -24,7 +25,7 @@ function ProtectedRoute({ children }) {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/logout" element={<LogoutPage />} />

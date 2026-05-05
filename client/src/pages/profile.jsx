@@ -31,6 +31,33 @@ function ProfileStat({ label, value }) {
 	)
 }
 
+function ProfileSkeleton() {
+	return (
+		<div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+			<div className="h-3 w-20 animate-pulse rounded bg-zinc-800" />
+			<div className="h-4 w-36 animate-pulse rounded bg-zinc-800" />
+			<div className="grid gap-3 sm:grid-cols-2">
+				<div className="space-y-2">
+					<div className="h-3 w-14 animate-pulse rounded bg-zinc-800" />
+					<div className="h-4 w-32 animate-pulse rounded bg-zinc-800" />
+				</div>
+				<div className="space-y-2">
+					<div className="h-3 w-12 animate-pulse rounded bg-zinc-800" />
+					<div className="h-4 w-24 animate-pulse rounded bg-zinc-800" />
+				</div>
+				<div className="space-y-2">
+					<div className="h-3 w-12 animate-pulse rounded bg-zinc-800" />
+					<div className="h-4 w-16 animate-pulse rounded bg-zinc-800" />
+				</div>
+				<div className="space-y-2">
+					<div className="h-3 w-14 animate-pulse rounded bg-zinc-800" />
+					<div className="h-4 w-28 animate-pulse rounded bg-zinc-800" />
+				</div>
+			</div>
+		</div>
+	)
+}
+
 export default function ProfilePage() {
 	const { token, role, coordinates } = useUser()
 	const navigate = useNavigate()
@@ -95,13 +122,16 @@ export default function ProfilePage() {
 	}, [])
 
 	const profileRole = profile?.role ?? role
-	const displayName = profile?.username ?? (profileRole === "worker" ? "Raj Verma" : "Priya Sharma")
 	const showPostsSection = profileRole === "worker"
 	const showStatsSection = profileRole === "worker"
 	const workerRating = Number(profile?.workerProfile?.rating ?? 0).toFixed(1)
 	const workerJobsCompleted = profile?.workerProfile?.jobsCompleted ?? 0
 	const workerPostsCount = workerPosts.length
 	const locationCoordinates = profile?.location?.coordinates
+
+	const displayName = isLoadingProfile
+		? "Loading profile..."
+		: profile?.username ?? "Your profile"
 
 	useEffect(() => {
 		let isMounted = true
@@ -229,14 +259,24 @@ export default function ProfilePage() {
 							</div>
 
 							<div className="space-y-2">
-								<h1 className="text-xl font-semibold sm:text-2xl">{displayName}</h1>
-								<p className="text-sm text-zinc-400">
-									{profileRole === "worker" ? "Verified Electrician" : "Home Services Client"}
-								</p>
-								<p className="inline-flex items-center gap-1 text-xs text-zinc-500 sm:text-sm">
-									<MapPin className="size-3.5" />
-									{locationName}
-								</p>
+								{isLoadingProfile ? (
+									<div className="space-y-2">
+										<div className="h-6 w-40 animate-pulse rounded bg-zinc-800 sm:h-7" />
+										<div className="h-4 w-32 animate-pulse rounded bg-zinc-800" />
+										<div className="h-3 w-44 animate-pulse rounded bg-zinc-800" />
+									</div>
+								) : (
+									<>
+										<h1 className="text-xl font-semibold sm:text-2xl">{displayName}</h1>
+										<p className="text-sm text-zinc-400">
+											{profileRole === "worker" ? "Verified Electrician" : "Home Services Client"}
+										</p>
+										<p className="inline-flex items-center gap-1 text-xs text-zinc-500 sm:text-sm">
+											<MapPin className="size-3.5" />
+											{locationName}
+										</p>
+									</>
+								)}
 								{profilePictureError && (
 									<p className="text-xs text-rose-400">{profilePictureError}</p>
 								)}
@@ -254,9 +294,7 @@ export default function ProfilePage() {
 							)}
 
 							{isLoadingProfile ? (
-								<div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-3 text-sm text-zinc-400">
-									Loading profile details...
-								</div>
+								<ProfileSkeleton />
 							) : (
 								<div className="grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 sm:grid-cols-2">
 									<div>

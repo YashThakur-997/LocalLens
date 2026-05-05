@@ -10,5 +10,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  }, // <--- Resolve ends here
+  server: { // <--- Server should be its own top-level property
+    host: "0.0.0.0",
+    port: 5000,
+    allowedHosts: true,
   },
 })
