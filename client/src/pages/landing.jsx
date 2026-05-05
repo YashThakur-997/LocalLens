@@ -61,7 +61,7 @@ export default function LandingPage() {
 						Stop guessing, start trusting. Every professional is verified through real completed work. See photos, videos, and authentic ratings before you commit.
 					</p>
 
-					<div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
+					<div className="hidden md:flex flex-col sm:flex-row gap-4 justify-center pt-8">
 						<Link
 							to="/login"
 							className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white text-lg font-semibold rounded-lg transition flex items-center justify-center gap-2"
@@ -183,7 +183,7 @@ export default function LandingPage() {
 			</section>
 
 			{/* CTA Section */}
-			<section className="py-20 md:py-28 border-t border-zinc-800">
+		<section className="hidden md:block py-20 md:py-28 border-t border-zinc-800">
 				<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
 					<h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
 						Ready to find your perfect service?
@@ -209,7 +209,7 @@ export default function LandingPage() {
 			</section>
 
 			{/* Footer */}
-			<footer className="border-t border-zinc-800 bg-zinc-900 py-12">
+		<footer className="hidden md:block border-t border-zinc-800 bg-zinc-900 py-12">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
 						<div>
