@@ -4,10 +4,13 @@ require('dotenv').config();
 
 const jwt = require('jsonwebtoken');
 
+const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const login_handler = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await UserModel.findOne({ email: email });
+        const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+        const user = await UserModel.findOne({ email: normalizedEmail });
         if (!user) {
             return res.status(404).send('User not found');
         }
@@ -38,13 +41,15 @@ const login_handler = async (req, res) => {
 const signup_handler = async (req, res) => {
     try {
         const { username, email, password, phone, role, location, workerProfile } = req.body;
+        const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+        const normalizedUsername = typeof username === 'string' ? username.trim() : username;
 
-        const existingUser = await UserModel.findOne({ email: email });
+        const existingUser = await UserModel.findOne({ email: normalizedEmail });
         if (existingUser) {
             return res.status(409).send('User already exists');
         }
         const normalizedRole = role || 'client';
-        const payload = { username, email, password, phone, role: normalizedRole, location };
+        const payload = { username: normalizedUsername, email: normalizedEmail, password, phone, role: normalizedRole, location };
 
         if (normalizedRole === 'worker') {
             payload.workerProfile = {
@@ -93,25 +98,31 @@ const search_workers_handler = async (req, res) => {
             minRating = "0",
         } = req.query;
 
+        const normalizedQuery = typeof q === 'string' ? q.trim() : '';
+        const normalizedCategory = typeof category === 'string' ? category.trim() : 'all';
+        const normalizedAvailability = typeof availability === 'string' ? availability.trim().toLowerCase() : 'all';
+        const parsedMinRating = Number.parseFloat(minRating);
+        const minimumRating = Number.isFinite(parsedMinRating) ? parsedMinRating : 0;
+
         const query = {
             role: 'worker',
         };
 
-        if (availability === 'available') {
+        if (normalizedAvailability === 'available') {
             query['workerProfile.isAvailable'] = true;
-        } else if (availability === 'unavailable') {
+        } else if (normalizedAvailability === 'unavailable') {
             query['workerProfile.isAvailable'] = false;
         }
 
-        if (category && category !== 'all') {
-            query['workerProfile.category'] = new RegExp(category, 'i');
+        if (normalizedCategory && normalizedCategory !== 'all') {
+            query['workerProfile.category'] = new RegExp(escapeRegExp(normalizedCategory), 'i');
         }
 
-        if (q) {
+        if (normalizedQuery) {
             query.$or = [
-                { username: new RegExp(q, 'i') },
-                { email: new RegExp(q, 'i') },
-                { 'workerProfile.category': new RegExp(q, 'i') },
+                { username: new RegExp(escapeRegExp(normalizedQuery), 'i') },
+                { email: new RegExp(escapeRegExp(normalizedQuery), 'i') },
+                { 'workerProfile.category': new RegExp(escapeRegExp(normalizedQuery), 'i') },
             ];
         }
 
@@ -139,7 +150,7 @@ const search_workers_handler = async (req, res) => {
                     workerProfile: worker.workerProfile,
                 };
             })
-            .filter((worker) => worker.rating >= Number(minRating || 0));
+            .filter((worker) => worker.rating >= minimumRating);
 
         return res.status(200).json({ workers: filteredWorkers });
     }
