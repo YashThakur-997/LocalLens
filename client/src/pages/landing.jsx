@@ -13,7 +13,7 @@ export default function LandingPage() {
 	}, [])
 
 	return (
-		<div className="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 overflow-hidden">
+		<div className="min-h-screen bg-linear-to-b from-zinc-950 via-zinc-900 to-zinc-950 overflow-hidden">
 			<GridBackgroundDemo className="fixed inset-0 pointer-events-none z-0" />
 			{/* Animated background elements */}
 			<div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -160,7 +160,7 @@ export default function LandingPage() {
 								<div key={i} className="group">
 									<div className="bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg p-8 h-full transition duration-300">
 										<div className="flex items-start gap-4">
-											<div className="flex-shrink-0">
+											<div className="shrink-0">
 												<div className="flex items-center justify-center h-12 w-12 rounded-lg bg-zinc-700">
 													<Icon className="w-6 h-6 text-indigo-400" />
 												</div>
