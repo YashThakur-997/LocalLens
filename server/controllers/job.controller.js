@@ -47,8 +47,8 @@ exports.getCurrentWork = async (req, res) => {
         }
 
         const filter = user.role === 'worker'
-            ? { worker: userId, status: 'accepted' }
-            : { client: userId, status: 'accepted' };
+            ? { worker: userId, status: { $in: ['accepted', 'completion_requested'] } }
+            : { client: userId, status: { $in: ['accepted', 'completion_requested'] } };
 
         const currentWork = await Job.find(filter)
             .populate('client', 'username phone location')

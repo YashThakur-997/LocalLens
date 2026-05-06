@@ -11,6 +11,7 @@ import Navbar from "@/pages/navbar"
 const statusStyles = {
   pending: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   accepted: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  completion_requested: "border-blue-500/30 bg-blue-500/10 text-blue-300",
   completed: "border-blue-500/30 bg-blue-500/10 text-blue-300",
   cancelled: "border-rose-500/30 bg-rose-500/10 text-rose-300",
 }

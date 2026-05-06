@@ -175,7 +175,7 @@ function ClientDashboard({ coordinates }) {
         rating: Number(reviewRating),
         comment: reviewComment,
       })
-      setReviewNotice("Review submitted successfully.")
+      setReviewNotice("Job verified and review submitted successfully.")
       setReviewTargetId("")
       setReviewOtp("")
       setReviewRating("5")
@@ -339,13 +339,15 @@ function ClientDashboard({ coordinates }) {
                       Requested {new Date(job.createdAt).toLocaleString()}
                     </p>
                     <p className="text-xs text-zinc-400">
-                      {job.otp ? "Worker shared an OTP. Enter it to verify and review." : "Waiting for the worker to finish and share the OTP."}
+                      {job.status === "completion_requested"
+                        ? "Worker requested completion. Enter OTP to verify and submit your review."
+                        : "Waiting for the worker to request completion verification."}
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-2 sm:items-end">
-                    <Badge className={job.otp ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
-                      {job.otp ? "OTP READY" : "CURRENT WORK"}
+                    <Badge className={job.status === "completion_requested" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
+                      {job.status === "completion_requested" ? "VERIFY OTP" : "IN PROGRESS"}
                     </Badge>
                     <Button
                       type="button"
@@ -355,8 +357,9 @@ function ClientDashboard({ coordinates }) {
                         setReviewTargetId((current) => (current === job._id ? "" : job._id))
                         setReviewNotice("")
                       }}
+                      disabled={job.status !== "completion_requested"}
                     >
-                      Give Review
+                      {job.status === "completion_requested" ? "Give Review" : "Awaiting OTP"}
                     </Button>
                   </div>
                 </div>
@@ -634,12 +637,12 @@ function WorkerDashboard() {
       setCompletionJobId(jobId)
       setCompletionNotice("")
       const response = await api.post(`/job/request-completion/${jobId}`)
-      const otpCode = response?.data?.debugOtp
+      const generatedOtp = response?.data?.otp
 
       setCompletionNotice(
-        otpCode
-          ? `OTP generated: ${otpCode}. Speak this code to the client so they can verify it.`
-          : response?.data?.message || "OTP generated and sent to the client."
+        generatedOtp
+          ? `OTP generated: ${generatedOtp}. Share it with the client to verify completion.`
+          : response?.data?.message || "Completion verification has been requested."
       )
       await api.get("/job/current-work").then((result) => {
         setCurrentWork(result.data.currentWork ?? [])
@@ -687,21 +690,27 @@ function WorkerDashboard() {
                       Accepted {new Date(job.createdAt).toLocaleString()}
                     </p>
                     <p className="text-xs text-zinc-400">
-                      {job.otp ? "OTP shared with client. Waiting for verification." : "Click Work Completed to generate the OTP."}
+                      {job.status === "completion_requested"
+                        ? "Completion requested. Waiting for client OTP verification."
+                        : "Click Work Completed to start client verification."}
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-2 sm:items-end">
-                    <Badge className={job.otp ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
-                      {job.otp ? "OTP READY" : "CURRENT WORK"}
+                    <Badge className={job.status === "completion_requested" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
+                      {job.status === "completion_requested" ? "VERIFICATION PENDING" : "IN PROGRESS"}
                     </Badge>
                     <Button
                       type="button"
                       className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500"
                       onClick={() => handleWorkCompleted(job._id)}
-                      disabled={completionJobId === job._id}
+                      disabled={completionJobId === job._id || job.status === "completion_requested"}
                     >
-                      {completionJobId === job._id ? "Generating OTP..." : "Work Completed"}
+                      {completionJobId === job._id
+                        ? "Requesting..."
+                        : job.status === "completion_requested"
+                          ? "Verification Requested"
+                          : "Work Completed"}
                     </Button>
                   </div>
                 </div>

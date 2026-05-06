@@ -5,10 +5,13 @@ const jobSchema = new mongoose.Schema({
     worker: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     status: { 
         type: String, 
-        enum: ['pending', 'accepted', 'completed', 'cancelled'], 
+        enum: ['pending', 'accepted', 'completion_requested', 'completed', 'cancelled'], 
         default: 'pending' 
     },
-    otp: { type: String }, // Generated when worker clicks "Job Done"
+    otpHash: { type: String },
+    otpExpiresAt: { type: Date },
+    completionRequestedAt: { type: Date },
+    otpVerificationAttempts: { type: Number, default: 0 },
     review: {
         rating: { type: Number, min: 1, max: 5 },
         comment: { type: String }
