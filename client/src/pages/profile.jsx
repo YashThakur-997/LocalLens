@@ -81,6 +81,12 @@ export default function ProfilePage() {
 	const [profilePictureUrl, setProfilePictureUrl] = useState("")
 	const [profilePictureLoading, setProfilePictureLoading] = useState(false)
 	const [profilePictureError, setProfilePictureError] = useState("")
+	const [openEditLocation, setOpenEditLocation] = useState(false)
+	const [editLatitude, setEditLatitude] = useState("")
+	const [editLongitude, setEditLongitude] = useState("")
+	const [editLocationStatus, setEditLocationStatus] = useState("")
+	const [editLocationError, setEditLocationError] = useState("")
+	const [editSaving, setEditSaving] = useState(false)
 
 	useEffect(() => {
 		let isMounted = true
@@ -131,6 +137,18 @@ export default function ProfilePage() {
 	const displayName = isLoadingProfile
 		? "Loading profile..."
 		: profile?.username ?? "Your profile"
+
+	useEffect(() => {
+		const coords = profile?.location?.coordinates
+		if (coords?.length === 2) {
+			setEditLongitude(String(coords[0]))
+			setEditLatitude(String(coords[1]))
+			return
+		}
+
+		setEditLongitude("")
+		setEditLatitude("")
+	}, [profile?.location?.coordinates])
 
 	useEffect(() => {
 		let isMounted = true
@@ -275,6 +293,78 @@ export default function ProfilePage() {
 		}
 	}
 
+	const handleUseCurrentLocation = async () => {
+		setEditLocationError("")
+		setEditLocationStatus("Detecting location...")
+
+		if (coordinates?.latitude && coordinates?.longitude) {
+			setEditLatitude(String(coordinates.latitude))
+			setEditLongitude(String(coordinates.longitude))
+			setEditLocationStatus("Using current device location")
+			return
+		}
+
+		if (!navigator.geolocation) {
+			setEditLocationStatus("")
+			setEditLocationError("Geolocation is not supported in this browser.")
+			return
+		}
+
+		navigator.geolocation.getCurrentPosition(
+			(position) => {
+				setEditLatitude(String(position.coords.latitude))
+				setEditLongitude(String(position.coords.longitude))
+				setEditLocationStatus("Using current device location")
+			},
+			() => {
+				setEditLocationStatus("")
+				setEditLocationError("Unable to detect location. Enter coordinates manually.")
+			}
+		)
+	}
+
+	const handleSaveLocation = async () => {
+		const parsedLatitude = Number(editLatitude)
+		const parsedLongitude = Number(editLongitude)
+
+		if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+			setEditLocationError("Enter valid latitude and longitude values.")
+			return
+		}
+
+		if (parsedLatitude < -90 || parsedLatitude > 90 || parsedLongitude < -180 || parsedLongitude > 180) {
+			setEditLocationError("Latitude must be between -90 and 90. Longitude must be between -180 and 180.")
+			return
+		}
+
+		try {
+			setEditSaving(true)
+			setEditLocationError("")
+			setEditLocationStatus("")
+
+			const response = await api.patch("/auth/me/location", {
+				latitude: parsedLatitude,
+				longitude: parsedLongitude,
+			})
+
+			const nextLocation = response?.data?.location ?? {
+				type: "Point",
+				coordinates: [parsedLongitude, parsedLatitude],
+			}
+
+			setProfile((current) => current ? { ...current, location: nextLocation } : current)
+			setLocationName(await reverseGeocode({ latitude: parsedLatitude, longitude: parsedLongitude }))
+			setEditLocationStatus("Location updated successfully")
+			setOpenEditLocation(false)
+		} catch (requestError) {
+			setEditLocationError(
+				requestError?.response?.data?.message || "Unable to update location right now."
+			)
+		} finally {
+			setEditSaving(false)
+		}
+	}
+
 	if (!token) {
 		return <Navigate to="/login" replace />
 	}
@@ -361,12 +451,75 @@ export default function ProfilePage() {
 							)}
 
 							<div className="flex w-full gap-2 sm:w-auto sm:justify-end">
-								<Button variant="outline" className="flex-1 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800 sm:flex-none">
-									Edit Profile
-								</Button>
-								<Button variant="outline" className="flex-1 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800 sm:flex-none">
-									View Archive
-								</Button>
+								<Dialog open={openEditLocation} onOpenChange={setOpenEditLocation}>
+									<DialogTrigger asChild>
+										<Button variant="outline" className="flex-1 rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800 sm:flex-none">
+											Edit Location
+										</Button>
+									</DialogTrigger>
+									<DialogContent>
+										<DialogHeader>
+											<DialogTitle>Edit Location</DialogTitle>
+											<DialogDescription>
+												Only non-unique fields can be updated. Location is editable.
+											</DialogDescription>
+										</DialogHeader>
+
+										<div className="grid gap-3">
+											<div className="grid gap-2">
+												<label className="text-xs text-zinc-400">Latitude</label>
+												<Input
+													value={editLatitude}
+													onChange={(event) => setEditLatitude(event.target.value)}
+													placeholder="e.g., 19.0760"
+												/>
+											</div>
+
+											<div className="grid gap-2">
+												<label className="text-xs text-zinc-400">Longitude</label>
+												<Input
+													value={editLongitude}
+													onChange={(event) => setEditLongitude(event.target.value)}
+													placeholder="e.g., 72.8777"
+												/>
+											</div>
+
+											<Button
+												type="button"
+												variant="outline"
+												className="rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800"
+												onClick={handleUseCurrentLocation}
+											>
+												Use current location
+											</Button>
+
+											{editLocationStatus && (
+												<p className="text-xs text-black">{editLocationStatus}</p>
+											)}
+											{editLocationError && (
+												<p className="text-xs text-rose-300">{editLocationError}</p>
+											)}
+										</div>
+
+										<DialogFooter>
+											<Button
+												type="button"
+												className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500"
+												onClick={handleSaveLocation}
+												disabled={editSaving}
+											>
+												{editSaving ? "Saving..." : "Save location"}
+											</Button>
+											<Button
+												variant="outline"
+												className="rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800"
+												onClick={() => setOpenEditLocation(false)}
+											>
+												Cancel
+											</Button>
+										</DialogFooter>
+									</DialogContent>
+								</Dialog>
 
 								<Dialog open={openSettings} onOpenChange={setOpenSettings}>
 									<DialogTrigger asChild>

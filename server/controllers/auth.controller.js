@@ -274,6 +274,50 @@ const update_worker_availability_handler = async (req, res) => {
     }
 }
 
+const update_location_handler = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const { latitude, longitude } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const parsedLatitude = Number(latitude);
+        const parsedLongitude = Number(longitude);
+
+        if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+            return res.status(400).json({ message: 'Latitude and longitude are required.' });
+        }
+
+        if (parsedLatitude < -90 || parsedLatitude > 90 || parsedLongitude < -180 || parsedLongitude > 180) {
+            return res.status(400).json({ message: 'Invalid latitude or longitude range.' });
+        }
+
+        const user = await UserModel.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        user.location = {
+            type: 'Point',
+            coordinates: [parsedLongitude, parsedLatitude],
+        };
+
+        await user.save();
+
+        return res.status(200).json({
+            message: 'Location updated successfully',
+            location: user.location,
+        });
+    }
+    catch (err) {
+        console.error('Location update error:', err);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+}
+
 const cloudinary = require('../config/cloudinary');
 
 const upload_profile_picture_handler = async (req, res) => {
@@ -339,5 +383,6 @@ module.exports = {
     get_worker_handler,
     profile_handler,
     update_worker_availability_handler,
+    update_location_handler,
     upload_profile_picture_handler,
 };
