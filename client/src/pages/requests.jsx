@@ -11,8 +11,8 @@ import Navbar from "@/pages/navbar"
 const statusStyles = {
   pending: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   accepted: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  completion_requested: "border-blue-500/30 bg-blue-500/10 text-blue-300",
-  completed: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  completion_pending: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  completed: "border-green-500/30 bg-green-500/10 text-green-300",
   cancelled: "border-rose-500/30 bg-rose-500/10 text-rose-300",
 }
 
@@ -62,6 +62,19 @@ export default function RequestsPage() {
     }
   }
 
+  const handleMarkCompleted = async (jobId) => {
+    try {
+      setUpdatingJobId(jobId)
+      await api.post(`/job/request-completion/${jobId}`)
+      setError("")
+      await loadRequests()
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Unable to mark as completed.")
+    } finally {
+      setUpdatingJobId("")
+    }
+  }
+
   if (!token) {
     return <Navigate to="/login" replace />
   }
@@ -104,12 +117,12 @@ export default function RequestsPage() {
                         {request.client?.phone ?? "Phone not available"}
                       </p>
                       <p className="text-sm text-zinc-400">Requested on {new Date(request.createdAt).toLocaleString()}</p>
-                      <p className="text-xs text-zinc-500">Status: {request.status}</p>
+                      <p className="text-xs text-zinc-500">Status: {request.status.toUpperCase().replace(/_/g, " ")}</p>
                     </div>
 
                     <div className="flex flex-col gap-2 sm:items-end">
                       <Badge className={statusStyles[request.status] ?? statusStyles.pending}>
-                        {request.status}
+                        {request.status.toUpperCase().replace(/_/g, " ")}
                       </Badge>
                       {request.status === "pending" && (
                         <div className="flex gap-2">
@@ -130,6 +143,21 @@ export default function RequestsPage() {
                           >
                             Reject
                           </Button>
+                        </div>
+                      )}
+                      {request.status === "accepted" && (
+                        <Button
+                          type="button"
+                          className="rounded-xl bg-blue-600 text-white hover:bg-blue-500"
+                          onClick={() => handleMarkCompleted(request._id)}
+                          disabled={updatingJobId === request._id}
+                        >
+                          Mark Completed
+                        </Button>
+                      )}
+                      {request.status === "completion_pending" && (
+                        <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-center text-xs text-blue-200">
+                          Waiting for client review
                         </div>
                       )}
                     </div>

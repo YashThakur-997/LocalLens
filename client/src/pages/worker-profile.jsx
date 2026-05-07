@@ -35,6 +35,9 @@ export default function WorkerProfilePage() {
   const [viewerIndex, setViewerIndex] = useState(-1)
   const [postsLoading, setPostsLoading] = useState(false)
   const [postsError, setPostsError] = useState("")
+  const [workerReviews, setWorkerReviews] = useState([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsError, setReviewsError] = useState("")
 
   useEffect(() => {
     let isMounted = true
@@ -95,6 +98,40 @@ export default function WorkerProfilePage() {
 
     if (workerId) {
       loadWorkerPosts()
+    }
+
+    return () => {
+      isMounted = false
+    }
+  }, [workerId])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadWorkerReviews = async () => {
+      try {
+        setReviewsLoading(true)
+        setReviewsError("")
+
+        const response = await api.get(`/job/worker-reviews/${workerId}`)
+
+        if (isMounted) {
+          setWorkerReviews(response.data.reviews ?? [])
+        }
+      } catch (requestError) {
+        if (isMounted) {
+          setReviewsError(requestError?.response?.data?.message || "Unable to load reviews.")
+          setWorkerReviews([])
+        }
+      } finally {
+        if (isMounted) {
+          setReviewsLoading(false)
+        }
+      }
+    }
+
+    if (workerId) {
+      loadWorkerReviews()
     }
 
     return () => {
@@ -229,9 +266,12 @@ export default function WorkerProfilePage() {
             </section>
 
             <Tabs defaultValue="posts" className="w-full">
-              <TabsList variant="line" className="grid w-full grid-cols-1 rounded-none border-t border-zinc-800 px-0 pt-2">
+              <TabsList variant="line" className="grid w-full grid-cols-2 rounded-none border-t border-zinc-800 px-0 pt-2">
                 <TabsTrigger value="posts" className="gap-2 text-zinc-400 data-active:text-zinc-100">
                   <span className="text-xs uppercase tracking-wide">Posts</span>
+                </TabsTrigger>
+                <TabsTrigger value="reviews" className="gap-2 text-zinc-400 data-active:text-zinc-100">
+                  <span className="text-xs uppercase tracking-wide">Reviews</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -251,6 +291,65 @@ export default function WorkerProfilePage() {
                       <PostModal posts={workerPosts} index={viewerIndex} onClose={() => setViewerIndex(-1)} />
                     )}
                   </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="reviews" className="pt-4">
+                {reviewsLoading ? (
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-400">
+                    Loading reviews...
+                  </div>
+                ) : reviewsError ? (
+                  <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                    {reviewsError}
+                  </div>
+                ) : workerReviews.length === 0 ? (
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-400">
+                    No reviews yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {workerReviews.map((job) => (
+                      <div key={job._id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                        <div className="flex gap-3">
+                          {/* Client Avatar */}
+                          <Avatar className="size-10 flex-shrink-0">
+                            <AvatarImage
+                              src={job.client?.profilePictureUrl || `https://ui-avatars.com/api/?name=${job.client?.username}&background=3f3f46&color=ffffff&bold=true`}
+                              alt={job.client?.username}
+                            />
+                            <AvatarFallback>{job.client?.username?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+
+                          {/* Review Content */}
+                          <div className="flex-1 space-y-2">
+                            {/* Header: Name and Rating */}
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-medium text-zinc-100">{job.client?.username ?? "Anonymous"}</p>
+                              <div className="flex items-center gap-1">
+                                <span className="text-yellow-400">★</span>
+                                <span className="text-sm font-semibold text-zinc-100">{job.review?.rating || 0}</span>
+                              </div>
+                            </div>
+
+                            {/* Comment */}
+                            {job.review?.comment && (
+                              <p className="text-sm text-zinc-300">{job.review.comment}</p>
+                            )}
+
+                            {/* Date */}
+                            <p className="text-xs text-zinc-500">
+                              {new Date(job.createdAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </TabsContent>
             </Tabs>

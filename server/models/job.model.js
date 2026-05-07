@@ -5,7 +5,7 @@ const jobSchema = new mongoose.Schema({
     worker: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     status: { 
         type: String, 
-        enum: ['pending', 'accepted', 'completion_requested', 'completed', 'cancelled'], 
+        enum: ['pending', 'accepted', 'completion_pending', 'completed', 'cancelled'], 
         default: 'pending' 
     },
     otpHash: { type: String },

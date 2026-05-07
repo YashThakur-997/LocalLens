@@ -171,13 +171,11 @@ function ClientDashboard({ coordinates }) {
       setReviewNotice("")
       await api.post("/job/verify-and-rate", {
         jobId,
-        otp: reviewOtp,
         rating: Number(reviewRating),
         comment: reviewComment,
       })
       setReviewNotice("Job verified and review submitted successfully.")
       setReviewTargetId("")
-      setReviewOtp("")
       setReviewRating("5")
       setReviewComment("")
       await loadCurrentWork()
@@ -339,15 +337,15 @@ function ClientDashboard({ coordinates }) {
                       Requested {new Date(job.createdAt).toLocaleString()}
                     </p>
                     <p className="text-xs text-zinc-400">
-                      {job.status === "completion_requested"
-                        ? "Worker requested completion. Enter OTP to verify and submit your review."
-                        : "Waiting for the worker to request completion verification."}
+                      {job.status === "completion_pending"
+                        ? "Worker marked this complete. Review and confirm by submitting your rating."
+                        : "Waiting for the worker to mark completion."}
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-2 sm:items-end">
-                    <Badge className={job.status === "completion_requested" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
-                      {job.status === "completion_requested" ? "VERIFY OTP" : "IN PROGRESS"}
+                    <Badge className={job.status === "completion_pending" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
+                      {job.status === "completion_pending" ? "REVIEW PENDING" : "IN PROGRESS"}
                     </Badge>
                     <Button
                       type="button"
@@ -357,38 +355,43 @@ function ClientDashboard({ coordinates }) {
                         setReviewTargetId((current) => (current === job._id ? "" : job._id))
                         setReviewNotice("")
                       }}
-                      disabled={job.status !== "completion_requested"}
+                      disabled={job.status !== "completion_pending"}
                     >
-                      {job.status === "completion_requested" ? "Give Review" : "Awaiting OTP"}
+                      {job.status === "completion_pending" ? "Give Review" : "Awaiting"}
                     </Button>
                   </div>
                 </div>
 
                 {reviewTargetId === job._id && (
                   <div className="mt-4 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
-                    <Input
-                      placeholder="OTP from worker"
-                      value={reviewOtp}
-                      onChange={(event) => setReviewOtp(event.target.value)}
-                      className="rounded-2xl border-zinc-800"
-                    />
-                    <select
-                      value={reviewRating}
-                      onChange={(event) => setReviewRating(event.target.value)}
-                      className="h-10 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
-                    >
-                      <option value="5">5 - Excellent</option>
-                      <option value="4">4 - Good</option>
-                      <option value="3">3 - Okay</option>
-                      <option value="2">2 - Poor</option>
-                      <option value="1">1 - Bad</option>
-                    </select>
-                    <textarea
-                      value={reviewComment}
-                      onChange={(event) => setReviewComment(event.target.value)}
-                      placeholder="Leave a short review"
-                      className="min-h-24 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700"
-                    />
+                    {/* Star Rating */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-200">Rating</label>
+                      <div className="flex gap-2">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            onClick={() => setReviewRating(String(star))}
+                            className={`text-2xl transition-colors ${
+                              star <= Number(reviewRating) ? "text-yellow-400" : "text-zinc-600"
+                            }`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Comment */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-zinc-200">Comment (optional)</label>
+                      <textarea
+                        value={reviewComment}
+                        onChange={(event) => setReviewComment(event.target.value)}
+                        placeholder="Leave a short review"
+                        className="min-h-24 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700"
+                      />
+                    </div>
                     <Button
                       type="button"
                       className="rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500"
@@ -529,7 +532,23 @@ function WorkerDashboard() {
   const [currentWorkLoading, setCurrentWorkLoading] = useState(true)
   const [currentWorkError, setCurrentWorkError] = useState("")
   const [completionNotice, setCompletionNotice] = useState("")
+  const [pendingOtp, setPendingOtp] = useState(null)
+  const otpTimerRef = useRef(null)
   const [completionJobId, setCompletionJobId] = useState("")
+
+  useEffect(() => {
+    const storedOtp = localStorage.getItem('workerPendingOtp')
+    if (storedOtp) {
+      const parsed = JSON.parse(storedOtp)
+      const expiryTime = parsed.expiresAt
+      const now = Date.now()
+      if (expiryTime > now) {
+        setPendingOtp(parsed)
+      } else {
+        localStorage.removeItem('workerPendingOtp')
+      }
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -584,14 +603,16 @@ function WorkerDashboard() {
     loadCurrentWork()
 
     const refreshTimer = window.setInterval(() => {
-      loadCurrentWork()
+      if (!pendingOtp) {
+        loadCurrentWork()
+      }
     }, 15000)
 
     return () => {
       isMounted = false
       window.clearInterval(refreshTimer)
     }
-  }, [])
+  }, [pendingOtp])
 
   const handleAvailabilityToggle = async () => {
     const nextAvailability = !isAvailable
@@ -638,6 +659,20 @@ function WorkerDashboard() {
       setCompletionNotice("")
       const response = await api.post(`/job/request-completion/${jobId}`)
       const generatedOtp = response?.data?.otp
+      const expiresAt = response?.data?.otpExpiresAt
+
+      if (generatedOtp && expiresAt) {
+        const otpData = { otp: generatedOtp, expiresAt: new Date(expiresAt).getTime(), jobId }
+        setPendingOtp(otpData)
+        localStorage.setItem('workerPendingOtp', JSON.stringify(otpData))
+        
+        const timeUntilExpiry = new Date(expiresAt).getTime() - Date.now()
+        if (otpTimerRef.current) clearTimeout(otpTimerRef.current)
+        otpTimerRef.current = setTimeout(() => {
+          setPendingOtp(null)
+          localStorage.removeItem('workerPendingOtp')
+        }, timeUntilExpiry)
+      }
 
       setCompletionNotice(
         generatedOtp
@@ -656,8 +691,54 @@ function WorkerDashboard() {
     }
   }
 
+  const handleCopyOtp = () => {
+    if (pendingOtp?.otp) {
+      navigator.clipboard.writeText(pendingOtp.otp)
+    }
+  }
+
+  const handleClearOtp = () => {
+    setPendingOtp(null)
+    localStorage.removeItem('workerPendingOtp')
+    if (otpTimerRef.current) clearTimeout(otpTimerRef.current)
+  }
+
   return (
     <div className="space-y-4">
+      {pendingOtp && (
+        <div className="sticky top-0 z-50 rounded-2xl border-2 border-emerald-500 bg-emerald-950/95 p-4 shadow-2xl">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-emerald-300">
+                ✓ OTP Generated & Ready to Share
+              </p>
+              <p className="text-2xl font-bold tracking-widest text-emerald-400 font-mono">
+                {pendingOtp.otp}
+              </p>
+              <p className="text-xs text-emerald-200">
+                Expires in ~10 minutes. Share this with your client to verify completion.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-500"
+                onClick={handleCopyOtp}
+              >
+                Copy OTP
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl border-emerald-700 bg-emerald-950 text-emerald-300 hover:bg-emerald-900"
+                onClick={handleClearOtp}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
         <CardHeader>
           <CardTitle className="text-2xl">Current Work</CardTitle>
@@ -690,26 +771,26 @@ function WorkerDashboard() {
                       Accepted {new Date(job.createdAt).toLocaleString()}
                     </p>
                     <p className="text-xs text-zinc-400">
-                      {job.status === "completion_requested"
-                        ? "Completion requested. Waiting for client OTP verification."
-                        : "Click Work Completed to start client verification."}
+                      {job.status === "completion_pending"
+                        ? "Job marked complete. Waiting for client review."
+                        : "Click Work Completed to notify client."}
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-2 sm:items-end">
-                    <Badge className={job.status === "completion_requested" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
-                      {job.status === "completion_requested" ? "VERIFICATION PENDING" : "IN PROGRESS"}
+                    <Badge className={job.status === "completion_pending" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
+                      {job.status === "completion_pending" ? "REVIEW PENDING" : "IN PROGRESS"}
                     </Badge>
                     <Button
                       type="button"
                       className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-500"
                       onClick={() => handleWorkCompleted(job._id)}
-                      disabled={completionJobId === job._id || job.status === "completion_requested"}
+                      disabled={completionJobId === job._id || job.status === "completion_pending"}
                     >
                       {completionJobId === job._id
                         ? "Requesting..."
-                        : job.status === "completion_requested"
-                          ? "Verification Requested"
+                        : job.status === "completion_pending"
+                          ? "Awaiting Review"
                           : "Work Completed"}
                     </Button>
                   </div>

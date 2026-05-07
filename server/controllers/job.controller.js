@@ -47,8 +47,8 @@ exports.getCurrentWork = async (req, res) => {
         }
 
         const filter = user.role === 'worker'
-            ? { worker: userId, status: { $in: ['accepted', 'completion_requested'] } }
-            : { client: userId, status: { $in: ['accepted', 'completion_requested'] } };
+            ? { worker: userId, status: { $in: ['accepted', 'completion_pending'] } }
+            : { client: userId, status: { $in: ['accepted', 'completion_pending'] } };
 
         const currentWork = await Job.find(filter)
             .populate('client', 'username phone location')
@@ -133,6 +133,30 @@ exports.updateJobStatus = async (req, res) => {
         });
     } catch (err) {
         console.error('Update booking status error:', err);
+        return res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+exports.getWorkerReviews = async (req, res) => {
+    try {
+        const { workerId } = req.params;
+
+        if (!workerId) {
+            return res.status(400).json({ message: 'Worker ID is required' });
+        }
+
+        const reviews = await Job.find({
+            worker: workerId,
+            status: 'completed',
+            'review.rating': { $exists: true }
+        })
+            .populate('client', 'username profilePictureUrl')
+            .select('review client createdAt')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({ reviews });
+    } catch (err) {
+        console.error('Worker reviews fetch error:', err);
         return res.status(500).json({ message: 'Internal Server Error' });
     }
 };
