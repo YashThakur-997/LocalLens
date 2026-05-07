@@ -82,10 +82,6 @@ export default function ProfilePage() {
 	const [profilePictureLoading, setProfilePictureLoading] = useState(false)
 	const [profilePictureError, setProfilePictureError] = useState("")
 
-	if (!token) {
-		return <Navigate to="/login" replace />
-	}
-
 	useEffect(() => {
 		let isMounted = true
 
@@ -277,6 +273,10 @@ export default function ProfilePage() {
 		} finally {
 			setProfilePictureLoading(false)
 		}
+	}
+
+	if (!token) {
+		return <Navigate to="/login" replace />
 	}
 
 	return (

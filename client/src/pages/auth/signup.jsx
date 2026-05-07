@@ -146,7 +146,7 @@ function SignupForm({ role }) {
 				resolvedCoordinates = nextCoordinates
 				const locationName = await reverseGeocode(nextCoordinates)
 				setLocationStatus(`Saved ${locationName}`)
-			} catch (err) {
+			} catch {
 				setShowMapPicker(true)
 				setError("Unable to detect location. Pick your point on the map instead.")
 				setLocationStatus("Auto-detect failed. Pick your location on the map.")

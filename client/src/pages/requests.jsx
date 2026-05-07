@@ -39,6 +39,7 @@ export default function RequestsPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRequests()
   }, [])
 

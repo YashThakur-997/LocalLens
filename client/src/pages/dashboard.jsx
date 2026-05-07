@@ -27,7 +27,14 @@ function WorkerResultCard({ worker, onViewProfile }) {
               <p className="text-xs text-zinc-500">{worker.area}</p>
             </div>
           </div>
-          <p className="text-sm font-semibold text-zinc-100">{Number(worker.rating).toFixed(1)}★</p>
+          <div className="flex flex-col items-end gap-1">
+            {worker.recommendationBadge && (
+              <span className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-200">
+                {worker.recommendationBadge}
+              </span>
+            )}
+            <p className="text-sm font-semibold text-zinc-100">{Number(worker.rating).toFixed(1)}★</p>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 text-xs text-zinc-300">
@@ -43,6 +50,12 @@ function WorkerResultCard({ worker, onViewProfile }) {
               : "border-zinc-700 bg-zinc-800/60 text-zinc-300",
           ].join(" ")}>{worker.isAvailable ? "Available" : "Busy"}</span>
         </div>
+
+        {worker.recommendationNote && (
+          <p className="text-xs text-zinc-500">
+            Best match: {worker.recommendationNote}
+          </p>
+        )}
 
         <Button
           type="button"
@@ -63,7 +76,7 @@ function ClientDashboard({ coordinates }) {
   const [category, setCategory] = useState("all")
   const [availability, setAvailability] = useState("all")
   const [minRating, setMinRating] = useState("0")
-  const [sortBy, setSortBy] = useState("default")
+  const [sortBy, setSortBy] = useState("ranked")
   const [workers, setWorkers] = useState([])
   const [workerAreaNames, setWorkerAreaNames] = useState({})
   const [hasSearched, setHasSearched] = useState(false)
@@ -71,7 +84,6 @@ function ClientDashboard({ coordinates }) {
   const [currentWorkLoading, setCurrentWorkLoading] = useState(true)
   const [currentWorkError, setCurrentWorkError] = useState("")
   const [reviewTargetId, setReviewTargetId] = useState("")
-  const [reviewOtp, setReviewOtp] = useState("")
   const [reviewRating, setReviewRating] = useState("5")
   const [reviewComment, setReviewComment] = useState("")
   const [reviewNotice, setReviewNotice] = useState("")
@@ -187,6 +199,7 @@ function ClientDashboard({ coordinates }) {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCurrentWork()
 
     const refreshTimer = window.setInterval(() => {
@@ -207,6 +220,9 @@ function ClientDashboard({ coordinates }) {
   }, [hasSearched, isLoading, workers.length])
 
   const workersWithEta = useMemo(() => {
+    const maxEtaMinutes = 120
+    const normalizedCategory = typeof category === "string" ? category.trim().toLowerCase() : "all"
+
     const enrichedWorkers = workers.map((worker) => {
       const workerCoordinates = worker?.location?.coordinates?.length === 2
         ? { latitude: worker.location.coordinates[1], longitude: worker.location.coordinates[0] }
@@ -216,12 +232,62 @@ function ClientDashboard({ coordinates }) {
         ? estimateEtaMinutes(clientCoordinates, workerCoordinates)
         : null
 
+      const ratingScore = Math.min(1, Math.max(0, Number(worker.rating || 0) / 5))
+      const jobsCompleted = Math.max(0, Number(worker.jobsCompleted || 0))
+      const acceptanceScore = Math.min(1, Math.max(0, Number(worker.acceptanceRate30d || 0)))
+      const etaScore = typeof etaMinutes === "number"
+        ? Math.min(1, Math.max(0, (maxEtaMinutes - etaMinutes) / maxEtaMinutes))
+        : 0
+      const categoryScore = normalizedCategory === "all"
+        ? 0.5
+        : (worker.category || "").toLowerCase() === normalizedCategory
+          ? 1
+          : 0
+      const ratingPriorMean = 0.75
+      const ratingPriorCount = 10
+      const adjustedRatingScore = (ratingScore * jobsCompleted + ratingPriorMean * ratingPriorCount)
+        / (jobsCompleted + ratingPriorCount)
+      const volumeScore = Math.min(1, Math.log1p(jobsCompleted) / Math.log1p(20))
+      const matchScore =
+        (etaScore * 0.25) +
+        (adjustedRatingScore * 0.2) +
+        (acceptanceScore * 0.2) +
+        (categoryScore * 0.15) +
+        (volumeScore * 0.2)
+
+      const recommendationBadge = jobsCompleted >= 10
+        ? "High experience"
+        : jobsCompleted >= 3
+          ? "Proven"
+          : "New"
+
+      const recommendationNote = jobsCompleted < 3
+        ? "New worker, rating based on a small sample"
+        : `Ranked for experience (${jobsCompleted} jobs), not just rating`
+
       return {
         ...worker,
         area: workerAreaNames[worker.id] ?? "Resolving location...",
         etaMinutes,
+        matchScore,
+        recommendationBadge,
+        recommendationNote,
       }
     })
+
+    if (sortBy === "ranked" || sortBy === "default") {
+      return [...enrichedWorkers].sort((a, b) => {
+        if (b.matchScore !== a.matchScore) {
+          return b.matchScore - a.matchScore
+        }
+
+        if ((b.jobsCompleted ?? 0) !== (a.jobsCompleted ?? 0)) {
+          return (b.jobsCompleted ?? 0) - (a.jobsCompleted ?? 0)
+        }
+
+        return (b.rating ?? 0) - (a.rating ?? 0)
+      })
+    }
 
     if (sortBy === "eta-asc") {
       return [...enrichedWorkers].sort((a, b) => {
@@ -260,7 +326,7 @@ function ClientDashboard({ coordinates }) {
     }
 
     return enrichedWorkers
-  }, [workers, workerAreaNames, clientCoordinates, sortBy])
+  }, [workers, workerAreaNames, clientCoordinates, sortBy, category])
 
   useEffect(() => {
     let isMounted = true
@@ -297,6 +363,7 @@ function ClientDashboard({ coordinates }) {
       }
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWorkerAreaNames({})
     return () => {
       isMounted = false
@@ -305,113 +372,113 @@ function ClientDashboard({ coordinates }) {
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
-        <CardHeader>
-          <CardTitle className="text-2xl">Current Work</CardTitle>
-          <CardDescription className="text-zinc-400">
-            Active bookings that are ready for client review.
-          </CardDescription>
-        </CardHeader>
+      {(currentWorkLoading || currentWorkError || currentWork.length > 0) && (
+        <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
+          <CardHeader>
+            <CardTitle className="text-2xl">Current Work</CardTitle>
+            <CardDescription className="text-zinc-400">
+              Active bookings that are ready for client review.
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent className="space-y-3">
-          {currentWorkLoading ? (
-            <p className="text-sm text-zinc-400">Loading current work...</p>
-          ) : currentWorkError ? (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
-              {currentWorkError}
-            </div>
-          ) : currentWork.length === 0 ? (
-            <p className="text-sm text-zinc-400">No active work right now.</p>
-          ) : (
-            currentWork.map((job) => (
-              <div key={job._id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-zinc-100">
-                      {job.worker?.username ?? "Worker"}
-                    </p>
-                    <p className="text-sm text-zinc-400">
-                      {job.worker?.workerProfile?.category ?? "Service request"}
-                    </p>
-                    <p className="text-xs text-zinc-500">
-                      Requested {new Date(job.createdAt).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      {job.status === "completion_pending"
-                        ? "Worker marked this complete. Review and confirm by submitting your rating."
-                        : "Waiting for the worker to mark completion."}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-2 sm:items-end">
-                    <Badge className={job.status === "completion_pending" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
-                      {job.status === "completion_pending" ? "REVIEW PENDING" : "IN PROGRESS"}
-                    </Badge>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800"
-                      onClick={() => {
-                        setReviewTargetId((current) => (current === job._id ? "" : job._id))
-                        setReviewNotice("")
-                      }}
-                      disabled={job.status !== "completion_pending"}
-                    >
-                      {job.status === "completion_pending" ? "Give Review" : "Awaiting"}
-                    </Button>
-                  </div>
-                </div>
-
-                {reviewTargetId === job._id && (
-                  <div className="mt-4 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
-                    {/* Star Rating */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-200">Rating</label>
-                      <div className="flex gap-2">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            onClick={() => setReviewRating(String(star))}
-                            className={`text-2xl transition-colors ${
-                              star <= Number(reviewRating) ? "text-yellow-400" : "text-zinc-600"
-                            }`}
-                          >
-                            ★
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {/* Comment */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-zinc-200">Comment (optional)</label>
-                      <textarea
-                        value={reviewComment}
-                        onChange={(event) => setReviewComment(event.target.value)}
-                        placeholder="Leave a short review"
-                        className="min-h-24 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      className="rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500"
-                      onClick={() => handleReviewSubmit(job._id)}
-                      disabled={reviewSubmitting}
-                    >
-                      {reviewSubmitting ? "Submitting..." : "Submit Review"}
-                    </Button>
-                  </div>
-                )}
+          <CardContent className="space-y-3">
+            {currentWorkLoading ? (
+              <p className="text-sm text-zinc-400">Loading current work...</p>
+            ) : currentWorkError ? (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+                {currentWorkError}
               </div>
-            ))
-          )}
-          {reviewNotice && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-300">
-              {reviewNotice}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              currentWork.map((job) => (
+                <div key={job._id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-zinc-100">
+                        {job.worker?.username ?? "Worker"}
+                      </p>
+                      <p className="text-sm text-zinc-400">
+                        {job.worker?.workerProfile?.category ?? "Service request"}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        Requested {new Date(job.createdAt).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-zinc-400">
+                        {job.status === "completion_pending"
+                          ? "Worker marked this complete. Review and confirm by submitting your rating."
+                          : "Waiting for the worker to mark completion."}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:items-end">
+                      <Badge className={job.status === "completion_pending" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"}>
+                        {job.status === "completion_pending" ? "REVIEW PENDING" : "IN PROGRESS"}
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl border-zinc-700 bg-zinc-950 text-zinc-100 hover:bg-zinc-800"
+                        onClick={() => {
+                          setReviewTargetId((current) => (current === job._id ? "" : job._id))
+                          setReviewNotice("")
+                        }}
+                        disabled={job.status !== "completion_pending"}
+                      >
+                        {job.status === "completion_pending" ? "Give Review" : "Awaiting"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {reviewTargetId === job._id && (
+                    <div className="mt-4 grid gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+                      {/* Star Rating */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-zinc-200">Rating</label>
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => setReviewRating(String(star))}
+                              className={`text-2xl transition-colors ${
+                                star <= Number(reviewRating) ? "text-yellow-400" : "text-zinc-600"
+                              }`}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Comment */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-zinc-200">Comment (optional)</label>
+                        <textarea
+                          value={reviewComment}
+                          onChange={(event) => setReviewComment(event.target.value)}
+                          placeholder="Leave a short review"
+                          className="min-h-24 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-700"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        className="rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500"
+                        onClick={() => handleReviewSubmit(job._id)}
+                        disabled={reviewSubmitting}
+                      >
+                        {reviewSubmitting ? "Submitting..." : "Submit Review"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+            {reviewNotice && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 text-sm text-zinc-300">
+                {reviewNotice}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
         <CardHeader>
@@ -471,6 +538,7 @@ function ClientDashboard({ coordinates }) {
               onChange={(event) => setSortBy(event.target.value)}
               className="h-10 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-zinc-700"
             >
+              <option value="ranked">Sort: Best match</option>
               <option value="default">Sort: Default</option>
               <option value="eta-asc">Sort: Fastest arrival</option>
               <option value="eta-desc">Sort: Slowest arrival</option>
@@ -532,23 +600,7 @@ function WorkerDashboard() {
   const [currentWorkLoading, setCurrentWorkLoading] = useState(true)
   const [currentWorkError, setCurrentWorkError] = useState("")
   const [completionNotice, setCompletionNotice] = useState("")
-  const [pendingOtp, setPendingOtp] = useState(null)
-  const otpTimerRef = useRef(null)
   const [completionJobId, setCompletionJobId] = useState("")
-
-  useEffect(() => {
-    const storedOtp = localStorage.getItem('workerPendingOtp')
-    if (storedOtp) {
-      const parsed = JSON.parse(storedOtp)
-      const expiryTime = parsed.expiresAt
-      const now = Date.now()
-      if (expiryTime > now) {
-        setPendingOtp(parsed)
-      } else {
-        localStorage.removeItem('workerPendingOtp')
-      }
-    }
-  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -603,16 +655,14 @@ function WorkerDashboard() {
     loadCurrentWork()
 
     const refreshTimer = window.setInterval(() => {
-      if (!pendingOtp) {
-        loadCurrentWork()
-      }
+      loadCurrentWork()
     }, 15000)
 
     return () => {
       isMounted = false
       window.clearInterval(refreshTimer)
     }
-  }, [pendingOtp])
+  }, [])
 
   const handleAvailabilityToggle = async () => {
     const nextAvailability = !isAvailable
@@ -658,26 +708,9 @@ function WorkerDashboard() {
       setCompletionJobId(jobId)
       setCompletionNotice("")
       const response = await api.post(`/job/request-completion/${jobId}`)
-      const generatedOtp = response?.data?.otp
-      const expiresAt = response?.data?.otpExpiresAt
-
-      if (generatedOtp && expiresAt) {
-        const otpData = { otp: generatedOtp, expiresAt: new Date(expiresAt).getTime(), jobId }
-        setPendingOtp(otpData)
-        localStorage.setItem('workerPendingOtp', JSON.stringify(otpData))
-        
-        const timeUntilExpiry = new Date(expiresAt).getTime() - Date.now()
-        if (otpTimerRef.current) clearTimeout(otpTimerRef.current)
-        otpTimerRef.current = setTimeout(() => {
-          setPendingOtp(null)
-          localStorage.removeItem('workerPendingOtp')
-        }, timeUntilExpiry)
-      }
 
       setCompletionNotice(
-        generatedOtp
-          ? `OTP generated: ${generatedOtp}. Share it with the client to verify completion.`
-          : response?.data?.message || "Completion verification has been requested."
+        response?.data?.message || "Completion verification has been requested."
       )
       await api.get("/job/current-work").then((result) => {
         setCurrentWork(result.data.currentWork ?? [])
@@ -691,54 +724,8 @@ function WorkerDashboard() {
     }
   }
 
-  const handleCopyOtp = () => {
-    if (pendingOtp?.otp) {
-      navigator.clipboard.writeText(pendingOtp.otp)
-    }
-  }
-
-  const handleClearOtp = () => {
-    setPendingOtp(null)
-    localStorage.removeItem('workerPendingOtp')
-    if (otpTimerRef.current) clearTimeout(otpTimerRef.current)
-  }
-
   return (
     <div className="space-y-4">
-      {pendingOtp && (
-        <div className="sticky top-0 z-50 rounded-2xl border-2 border-emerald-500 bg-emerald-950/95 p-4 shadow-2xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-emerald-300">
-                ✓ OTP Generated & Ready to Share
-              </p>
-              <p className="text-2xl font-bold tracking-widest text-emerald-400 font-mono">
-                {pendingOtp.otp}
-              </p>
-              <p className="text-xs text-emerald-200">
-                Expires in ~10 minutes. Share this with your client to verify completion.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                className="rounded-xl bg-emerald-600 text-white hover:bg-emerald-500"
-                onClick={handleCopyOtp}
-              >
-                Copy OTP
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-xl border-emerald-700 bg-emerald-950 text-emerald-300 hover:bg-emerald-900"
-                onClick={handleClearOtp}
-              >
-                Dismiss
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
       <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 text-zinc-100">
         <CardHeader>
           <CardTitle className="text-2xl">Current Work</CardTitle>

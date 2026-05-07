@@ -52,6 +52,7 @@ export default function PostModal({ posts, index: startIndex = 0, onClose }) {
 
   useEffect(() => {
     // keep likes arrays in sync when posts change
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLikes((s) => {
       const copy = posts.map((_, i) => s[i] ?? 0)
       return copy

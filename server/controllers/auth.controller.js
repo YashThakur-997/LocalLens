@@ -1,4 +1,5 @@
 const UserModel = require('../models/user.model');
+const Job = require('../models/job.model');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
@@ -130,10 +131,43 @@ const search_workers_handler = async (req, res) => {
             .select('username role location workerProfile profilePictureUrl')
             .sort({ 'workerProfile.rating': -1, 'workerProfile.jobsCompleted': -1, createdAt: -1 });
 
+        const workerIds = workers.map((worker) => worker._id);
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const recentJobStats = workerIds.length === 0
+            ? []
+            : await Job.aggregate([
+                {
+                    $match: {
+                        worker: { $in: workerIds },
+                        createdAt: { $gte: thirtyDaysAgo },
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$worker',
+                        total: { $sum: 1 },
+                        completed: {
+                            $sum: {
+                                $cond: [{ $eq: ['$status', 'completed'] }, 1, 0],
+                            },
+                        },
+                    },
+                },
+            ]);
+
+        const recentStatsByWorker = recentJobStats.reduce((acc, stat) => {
+            acc[String(stat._id)] = stat;
+            return acc;
+        }, {});
+
         const filteredWorkers = workers
             .map((worker) => {
                 const rating = worker.workerProfile?.rating ?? 0;
                 const jobsCompleted = worker.workerProfile?.jobsCompleted ?? 0;
+                const recentStats = recentStatsByWorker[String(worker._id)] || { total: 0, completed: 0 };
+                const acceptanceRate30d = recentStats.total > 0
+                    ? recentStats.completed / recentStats.total
+                    : 0;
 
                 return {
                     id: worker._id,
@@ -142,6 +176,8 @@ const search_workers_handler = async (req, res) => {
                     jobsCompleted,
                     category: worker.workerProfile?.category ?? 'General electrician',
                     isAvailable: worker.workerProfile?.isAvailable ?? true,
+                    acceptanceRate30d,
+                    recentJobs30d: recentStats.total,
                     profilePictureUrl: worker.profilePictureUrl,
                     area: worker.location?.coordinates?.length === 2
                         ? `${worker.location.coordinates[1].toFixed(4)}, ${worker.location.coordinates[0].toFixed(4)}`
