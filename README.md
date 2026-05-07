@@ -1,5 +1,9 @@
 # LocalLens
 
+<p align="center">
+<img src="./client/public/Locallens.png" width="250" alt="LocalLens Logo" >
+</p>
+
 LocalLens is a full-stack MERN application for finding trusted local services through verified real-world work, photos, videos, and authentic reviews. It uses a modern cloud-native deployment model with separate frontend and backend services, AWS ECS, and Cloudflare-managed SSL/TLS for secure delivery.
 
 ## Live Demo
@@ -44,29 +48,22 @@ LocalLens is deployed with a cloud-native, service-oriented setup:
 - Docker Desktop
 - AWS CLI configured if you plan to work with the cloud deployment
 
-### Local Development
+### Local Development (With docker)
 
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/local-lens.git
+git clone https://github.com/YashThakur-997/LocalLens.git
 cd local-lens
 ```
 
 Set up environment variables:
 
-Create a `.env` file in both `client` and `server`.
-
 ```env
-# client/.env
-VITE_API_BASE_URL=http://localhost:5000/api
-```
-
-Example server environment variables:
-
-```env
-# server/.env
-PORT=5000
+# .env
+FRONTEND_PORT = your frontend port
+VITE_API_BASE_URL=http://localhost:6000/api
+BACKEND_PORT=6000
 MONGODB_URI=your-mongodb-connection-string
 JWT_SECRET=your-jwt-secret
 CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
@@ -98,6 +95,23 @@ npm install
 npm run dev
 ```
 
+Have to add .env file in both client and server
+
+```client
+# client .env
+FRONTEND_PORT= 
+VITE_API_BASE_URL=http://localhost:6000/api
+```
+
+```server
+# server .env
+BACKEND_PORT=6000
+MONGODB_URI=your-mongodb-connection-string
+JWT_SECRET=your-jwt-secret
+CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
+CLOUDINARY_API_KEY=your-cloudinary-api-key
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
+```
 
 ## Deployment Notes
 
