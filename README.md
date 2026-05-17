@@ -125,4 +125,4 @@ README.md
 
 ## License
 
-This project is licensed under the MIT License.
+This project is proprietary and private. All rights reserved.
